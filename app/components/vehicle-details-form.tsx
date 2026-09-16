@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import {
   type ChangeEvent,
-  type DragEvent,
   type FormEvent,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -103,12 +104,17 @@ export default function VehicleDetailsForm() {
   const [form, setForm] = useState<VehicleForm>(initialForm);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [savedRequest, setSavedRequest] = useState<SavedRequest | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
 
   function updateField(field: keyof VehicleForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -152,28 +158,12 @@ export default function VehicleDetailsForm() {
 
     setPhoto(selectedPhoto);
     setErrors((current) => ({ ...current, photo: undefined }));
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhotoPreview(typeof reader.result === "string" ? reader.result : null);
-    };
-    reader.readAsDataURL(selectedPhoto);
+    setPhotoPreview(URL.createObjectURL(selectedPhoto));
   }
 
   function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const selectedPhoto = event.target.files?.[0];
     if (selectedPhoto) selectPhoto(selectedPhoto);
-  }
-
-  function openPhotoPicker() {
-    photoInputRef.current?.click();
-  }
-
-  function handlePhotoDrop(event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    setIsDraggingPhoto(false);
-    const droppedPhoto = event.dataTransfer.files?.[0];
-    if (droppedPhoto) selectPhoto(droppedPhoto);
   }
 
   function removePhoto() {
@@ -488,101 +478,89 @@ export default function VehicleDetailsForm() {
               </label>
               <span className="text-xs text-[#8b93a1]">Maximum 10 MB</span>
             </div>
-            <div className="relative">
-              <input
-                ref={photoInputRef}
-                id="headlight-photo"
-                name="photo"
-                type="file"
-                accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif"
-                onChange={handlePhotoChange}
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  setIsDraggingPhoto(true);
-                }}
-                onDragOver={(event) => event.preventDefault()}
-                onDragLeave={() => setIsDraggingPhoto(false)}
-                onDrop={handlePhotoDrop}
-                aria-invalid={Boolean(errors.photo)}
-                aria-describedby={errors.photo ? "photo-error" : "photo-help"}
-                className={
-                  photo
-                    ? "peer sr-only"
-                    : "peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                }
-              />
-              <div
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setIsDraggingPhoto(true);
-              }}
-              onDragOver={(event) => event.preventDefault()}
-              onDragLeave={() => setIsDraggingPhoto(false)}
-              onDrop={handlePhotoDrop}
-              className={`min-h-36 rounded-xl border border-dashed p-4 transition peer-focus-visible:outline-none peer-focus-visible:ring-3 peer-focus-visible:ring-[#536ee8]/10 ${
+            <div
+              className={`rounded-xl border p-5 ${
                 errors.photo
                   ? "border-[#d45b5b] bg-[#fffafa]"
-                  : isDraggingPhoto
-                    ? "border-[#536ee8] bg-[#f3f5ff]"
-                    : photo
-                      ? "border-[#78ae9d] bg-[#f6fbf9]"
-                      : "border-[#c7cdd6] bg-[#fafbfc] hover:border-[#8797c8] hover:bg-[#f8f9fc]"
+                  : photo
+                    ? "border-[#b8d8cd] bg-[#f8fcfa]"
+                    : "border-[#d7dce4] bg-[#fafbfc]"
               }`}
-              >
-              {photo ? (
-                <div className="flex min-h-28 flex-col gap-4 sm:flex-row sm:items-center">
-                  {photoPreview && previewablePhotoTypes.has(photo.type) ? (
-                    <div
-                      role="img"
-                      aria-label={`Preview of ${photo.name}`}
-                      className="h-28 w-full shrink-0 rounded-[10px] bg-[#e2e6eb] bg-cover bg-center sm:w-36"
-                      style={{ backgroundImage: `url("${photoPreview}")` }}
-                    />
-                  ) : (
-                    <div className="grid h-28 w-full shrink-0 place-items-center rounded-[10px] bg-[#e8ecef] text-[#647184] sm:w-36">
+            >
+              <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-center">
+                <div className="min-w-0">
+                  <div className="flex items-start gap-3">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-[10px] border border-[#dfe3ea] bg-white text-[#5d6b80] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
                       <UploadIcon />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-[#30394a]">Select a damage photo</p>
+                      <p className="mt-1 text-xs leading-5 text-[#858e9d]">
+                        JPG, PNG, WebP, HEIC or AVIF up to 10 MB.
+                      </p>
                     </div>
-                  )}
-                  <div className="min-w-0 flex-1 text-left">
-                    <div className="flex items-center gap-2 text-[#28735e]">
-                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#e1f2ec]">
+                  </div>
+
+                  <input
+                    ref={photoInputRef}
+                    id="headlight-photo"
+                    name="photo"
+                    type="file"
+                    accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif"
+                    onClick={(event) => {
+                      event.currentTarget.value = "";
+                    }}
+                    onChange={handlePhotoChange}
+                    aria-invalid={Boolean(errors.photo)}
+                    aria-describedby={errors.photo ? "photo-error" : "photo-help"}
+                    className="mt-5 block w-full cursor-pointer rounded-[10px] border border-[#cfd5dd] bg-white text-sm text-[#657083] shadow-[0_1px_2px_rgba(16,24,40,0.03)] file:mr-4 file:cursor-pointer file:border-0 file:border-r file:border-[#dfe3e9] file:bg-[#f3f5f8] file:px-4 file:py-3 file:text-sm file:font-semibold file:text-[#344054] hover:border-[#aeb7c5] focus:outline-none focus:ring-3 focus:ring-[#536ee8]/10"
+                  />
+
+                  {photo ? (
+                    <div className="mt-4 flex items-start gap-3 rounded-[10px] border border-[#cce3da] bg-white p-3">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#e1f2ec] text-[#28735e]">
                         <CheckIcon />
                       </span>
-                      <span className="text-xs font-semibold">Photo selected</span>
-                    </div>
-                    <p className="mt-2 truncate text-sm font-medium text-[#31483f]">{photo.name}</p>
-                    <p className="mt-1 text-xs text-[#6f8d82]">{formatFileSize(photo.size)}</p>
-                    <p className="mt-1.5 text-xs text-[#6f7b89]">This photo will upload when you submit the request.</p>
-                    <div className="mt-3 flex items-center gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-[#31483f]">{photo.name}</p>
+                        <p className="mt-0.5 text-xs text-[#73847d]">{formatFileSize(photo.size)} · Image ready</p>
+                      </div>
                       <button
                         type="button"
-                        onClick={openPhotoPicker}
-                        className="cursor-pointer text-xs font-semibold text-[#4b62ca] hover:underline"
+                        onClick={removePhoto}
+                        className="shrink-0 text-xs font-semibold text-[#a54b4b] hover:underline"
                       >
-                        Replace photo
-                      </button>
-                      <button type="button" onClick={removePhoto} className="text-xs font-semibold text-[#b04d4d] hover:underline">
                         Remove
                       </button>
                     </div>
-                  </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-[#858e9d]">No image selected.</p>
+                  )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={openPhotoPicker}
-                  className="flex min-h-28 w-full cursor-pointer flex-col items-center justify-center px-4 text-center"
-                  aria-label="Choose a headlight photo"
-                >
-                  <span className="grid size-10 place-items-center rounded-[10px] border border-[#e1e5eb] bg-white text-[#5f6e85] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-                    <UploadIcon />
-                  </span>
-                  <span className="mt-3 text-sm font-medium text-[#364052]">
-                    {isDraggingPhoto ? "Drop your photo here" : "Choose a photo"}
-                  </span>
-                  <span className="mt-1 text-xs text-[#89919e]">or drag and drop · JPG, PNG, WebP, HEIC or AVIF up to 10 MB</span>
-                </button>
-              )}
+
+                <div className="relative aspect-[4/3] overflow-hidden rounded-[10px] border border-[#dfe3e9] bg-[#eef1f4]">
+                  {photo && photoPreview && previewablePhotoTypes.has(photo.type) ? (
+                    <Image
+                      src={photoPreview}
+                      alt={`Preview of ${photo.name}`}
+                      fill
+                      unoptimized
+                      sizes="(max-width: 640px) 100vw, 240px"
+                      className="object-contain"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center p-5 text-center text-[#8a94a3]">
+                      <div>
+                        <span className="mx-auto grid size-10 place-items-center rounded-full bg-white text-[#6e7a8c] shadow-sm">
+                          <UploadIcon />
+                        </span>
+                        <p className="mt-2 text-xs font-medium">
+                          {photo ? "Preview is unavailable for this format" : "Image preview"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             {errors.photo ? (
