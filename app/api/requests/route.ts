@@ -32,6 +32,19 @@ type CreatedRequestRow = {
   CreatedAt: Date;
 };
 
+type SellerRequestRow = {
+  RequestId: string;
+  CustomerName: string;
+  VehicleModel: string;
+  VehicleYear: number;
+  Vin: string | null;
+  HeadlightSide: string;
+  PhotoFileName: string;
+  Status: string;
+  CreatedAt: Date;
+  UpdatedAt: Date;
+};
+
 function readText(formData: FormData, name: string) {
   const value = formData.get(name);
   return typeof value === "string" ? value.trim() : "";
@@ -104,7 +117,7 @@ export async function POST(request: Request) {
   }
 
   if (photo.size > maximumPhotoSize) {
-    return validationError("The photo must be smaller than 5 MB.");
+    return validationError("The photo must be smaller than 10 MB.");
   }
 
   try {
@@ -174,6 +187,57 @@ export async function POST(request: Request) {
 
     return Response.json(
       { error: "The request could not be submitted. Please try again." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function GET() {
+  try {
+    const { pool } = await getSqlServerConnection();
+
+    const result = await pool.request().query<SellerRequestRow>(`
+      SELECT
+        CONVERT(varchar(36), RequestId) AS RequestId,
+        CustomerName,
+        VehicleModel,
+        VehicleYear,
+        Vin,
+        HeadlightSide,
+        PhotoFileName,
+        Status,
+        CreatedAt,
+        UpdatedAt
+      FROM dbo.CustomerRequests
+      ORDER BY CreatedAt DESC;
+    `);
+
+    return Response.json({
+      requests: result.recordset.map((request) => ({
+        id: request.RequestId,
+        customerName: request.CustomerName,
+        vehicleModel: request.VehicleModel,
+        vehicleYear: request.VehicleYear,
+        vin: request.Vin,
+        headlightSide: request.HeadlightSide,
+        photoFileName: request.PhotoFileName,
+        status: request.Status,
+        createdAt: request.CreatedAt.toISOString(),
+        updatedAt: request.UpdatedAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    console.error("Seller request retrieval failed", error);
+
+    if (error instanceof SqlServerConfigurationError) {
+      return Response.json(
+        { error: "The request service is not configured yet." },
+        { status: 503 },
+      );
+    }
+
+    return Response.json(
+      { error: "The requests could not be loaded. Please try again." },
       { status: 500 },
     );
   }
