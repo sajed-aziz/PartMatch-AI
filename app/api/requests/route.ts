@@ -1,4 +1,6 @@
 import { getSqlServerConnection, SqlServerConfigurationError } from "@/lib/sql-server";
+import { getCustomer } from "@/lib/auth";
+import { isSameOrigin, privateJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -38,7 +40,7 @@ function readText(formData: FormData, name: string) {
 }
 
 function validationError(message: string) {
-  return Response.json({ error: message }, { status: 400 });
+  return privateJson({ error: message }, 400);
 }
 
 function getPhotoMimeType(photo: File) {
@@ -49,12 +51,20 @@ function getPhotoMimeType(photo: File) {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) {
+    return privateJson({ error: "Submit your request from the PartMatch website." }, 403);
+  }
+  let customer;
+  try { customer = await getCustomer(); } catch {
+    return privateJson({ error: "Unable to verify your session. Please try again later." }, 503);
+  }
+  if (!customer) return privateJson({ error: "Sign in before submitting a request." }, 401);
   const contentLength = Number(request.headers.get("content-length"));
 
   if (Number.isFinite(contentLength) && contentLength > maximumRequestSize) {
-    return Response.json(
+    return privateJson(
       { error: "The uploaded request is too large." },
-      { status: 413 },
+      413,
     );
   }
 
@@ -72,6 +82,10 @@ export async function POST(request: Request) {
   const vin = readText(formData, "vin").toUpperCase().replace(/\s/g, "");
   const side = readText(formData, "side");
   const photo = formData.get("photo");
+
+  if (formData.get("consent") !== "true") {
+    return validationError("Confirm your permission to store and share these details and photo for this request.");
+  }
 
   if (customerName.length < 2 || customerName.length > 150) {
     return validationError("Enter a customer name between 2 and 150 characters.");
@@ -104,7 +118,7 @@ export async function POST(request: Request) {
   }
 
   if (photo.size > maximumPhotoSize) {
-    return validationError("The photo must be smaller than 5 MB.");
+    return validationError("The photo must be 10 MB or smaller.");
   }
 
   try {
@@ -112,6 +126,7 @@ export async function POST(request: Request) {
     const { pool, driver } = await getSqlServerConnection();
     const result = await pool
       .request()
+      .input("customerId", driver.UniqueIdentifier, customer.CustomerId)
       .input("customerName", driver.NVarChar(150), customerName)
       .input("vehicleModel", driver.NVarChar(100), model)
       .input("vehicleYear", driver.SmallInt, year)
@@ -123,6 +138,7 @@ export async function POST(request: Request) {
       .input("photoData", driver.VarBinary(driver.MAX), photoData)
       .query<CreatedRequestRow>(`
         INSERT INTO dbo.CustomerRequests (
+          CustomerId,
           CustomerName,
           VehicleModel,
           VehicleYear,
@@ -131,13 +147,16 @@ export async function POST(request: Request) {
           PhotoFileName,
           PhotoMimeType,
           PhotoSizeBytes,
-          PhotoData
+          PhotoData,
+          ConsentVersion,
+          ConsentAcceptedAt
         )
         OUTPUT
           CONVERT(varchar(36), INSERTED.RequestId) AS RequestId,
           INSERTED.Status,
           INSERTED.CreatedAt
         VALUES (
+          @customerId,
           @customerName,
           @vehicleModel,
           @vehicleYear,
@@ -146,13 +165,15 @@ export async function POST(request: Request) {
           @photoFileName,
           @photoMimeType,
           @photoSizeBytes,
-          @photoData
+          @photoData,
+          '2026-09-25',
+          SYSUTCDATETIME()
         );
       `);
 
     const createdRequest = result.recordset[0];
 
-    return Response.json(
+    return privateJson(
       {
         request: {
           id: createdRequest.RequestId,
@@ -160,21 +181,24 @@ export async function POST(request: Request) {
           createdAt: createdRequest.CreatedAt.toISOString(),
         },
       },
-      { status: 201 },
+      201,
     );
   } catch (error) {
-    console.error("Customer request submission failed", error);
+    // SQL driver errors may contain query parameters or connection details.
+    console.error("Customer request submission failed", {
+      category: error instanceof SqlServerConfigurationError ? "configuration" : "storage",
+    });
 
     if (error instanceof SqlServerConfigurationError) {
-      return Response.json(
+      return privateJson(
         { error: "The submission service is not configured yet." },
-        { status: 503 },
+        503,
       );
     }
 
-    return Response.json(
+    return privateJson(
       { error: "The request could not be submitted. Please try again." },
-      { status: 500 },
+      500,
     );
   }
 }

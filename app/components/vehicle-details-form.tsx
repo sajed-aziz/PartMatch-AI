@@ -17,12 +17,14 @@ type VehicleForm = {
   side: string;
 };
 
-type FormErrors = Partial<Record<keyof VehicleForm | "photo", string>>;
+type FormErrors = Partial<Record<keyof VehicleForm | "photo" | "consent", string>>;
 
 type SavedRequest = {
   requestId: string;
   vehicle: VehicleForm;
   photoName: string;
+  createdAt: string;
+  status: string;
 };
 
 type SubmissionResponse = {
@@ -107,8 +109,16 @@ export default function VehicleDetailsForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [savedRequest, setSavedRequest] = useState<SavedRequest | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const submissionLock = useRef(false);
+  const feedbackRef = useRef<HTMLDivElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (savedRequest || submitError) feedbackRef.current?.focus();
+  }, [savedRequest, submitError]);
 
   useEffect(() => {
     return () => {
@@ -177,11 +187,12 @@ export default function VehicleDetailsForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submissionLock.current || savedRequest) return;
 
     const nextErrors: FormErrors = {};
 
-    if (form.customerName.trim().length < 2) {
-      nextErrors.customerName = "Enter the customer’s full name.";
+    if (form.customerName.trim().length < 2 || form.customerName.trim().length > 150) {
+      nextErrors.customerName = "Enter a customer name between 2 and 150 characters.";
     }
 
     if (!form.model) {
@@ -200,15 +211,25 @@ export default function VehicleDetailsForm() {
       nextErrors.side = "Select the headlight side, or choose Not sure.";
     }
 
-    if (!photo) {
+    if (!photo || photo.size === 0) {
       nextErrors.photo = "Choose a clear headlight photo.";
     }
 
+    if (!consent) {
+      nextErrors.consent = "Confirm your permission before submitting.";
+    }
+
     setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      const currentForm = event.currentTarget;
+      requestAnimationFrame(() => currentForm.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+    }
 
     if (Object.keys(nextErrors).length === 0 && photo) {
+      submissionLock.current = true;
       setIsSubmitting(true);
       setSubmitError(null);
+      setSessionExpired(false);
       setSavedRequest(null);
 
       const normalizedVehicle = {
@@ -223,30 +244,40 @@ export default function VehicleDetailsForm() {
       requestData.set("vin", normalizedVehicle.vin);
       requestData.set("side", normalizedVehicle.side);
       requestData.set("photo", photo);
+      requestData.set("consent", "true");
 
       try {
         const response = await fetch("/api/requests", {
           method: "POST",
           body: requestData,
+          signal: AbortSignal.timeout(60_000),
         });
-        const result = (await response.json()) as SubmissionResponse;
+        const result = (await response.json().catch(() => null)) as SubmissionResponse | null;
+        if (response.status === 401) setSessionExpired(true);
 
-        if (!response.ok || !result.request) {
-          throw new Error(result.error || "The request could not be submitted.");
+        if (!response.ok || !result?.request?.id || !result.request.createdAt || !result.request.status) {
+          throw new Error(result?.error || "We could not confirm submission. Your details are still here. Please try again later.");
         }
 
         setSavedRequest({
           requestId: result.request.id,
           vehicle: normalizedVehicle,
           photoName: photo.name,
+          createdAt: result.request.createdAt,
+          status: result.request.status,
         });
       } catch (error) {
         setSubmitError(
-          error instanceof Error
+          error instanceof Error && error.name === "TimeoutError"
+            ? "Submission is taking longer than expected. We could not confirm whether it was saved. Keep these details and try again later."
+            : error instanceof TypeError
+            ? "We could not connect to the submission service. Check your connection and try again. Your details are still here."
+            : error instanceof Error
             ? error.message
             : "The request could not be submitted. Please try again.",
         );
       } finally {
+        submissionLock.current = false;
         setIsSubmitting(false);
       }
     }
@@ -265,7 +296,9 @@ export default function VehicleDetailsForm() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} noValidate className="px-6 py-7 sm:px-8 sm:py-9">
+      <form onSubmit={handleSubmit} noValidate aria-busy={isSubmitting} className="px-6 py-7 sm:px-8 sm:py-9">
+        <fieldset disabled={isSubmitting || Boolean(savedRequest)} className="min-w-0">
+        <legend className="sr-only">Customer request details and permission</legend>
         <div className="grid min-w-0 gap-x-5 gap-y-6 sm:grid-cols-2">
           <div className="flex items-end justify-between border-b border-[#eceef1] pb-4 sm:col-span-2">
             <div>
@@ -282,6 +315,7 @@ export default function VehicleDetailsForm() {
               id="customer-name"
               name="customerName"
               type="text"
+              maxLength={150}
               value={form.customerName}
               onChange={(event) => updateField("customerName", event.target.value)}
               autoComplete="name"
@@ -429,7 +463,7 @@ export default function VehicleDetailsForm() {
             <span className="text-xs font-medium text-[#9aa1ad]">02</span>
           </div>
 
-          <fieldset className="sm:col-span-2" aria-describedby={errors.side ? "side-error" : "side-help"}>
+          <fieldset className="sm:col-span-2" aria-invalid={Boolean(errors.side)} tabIndex={errors.side ? -1 : undefined} aria-describedby={errors.side ? "side-error" : "side-help"}>
             <legend className="mb-2.5 text-[13px] font-medium text-[#344054]">
               Headlight side <span className="text-[#d45b5b]">*</span>
             </legend>
@@ -575,8 +609,41 @@ export default function VehicleDetailsForm() {
           </div>
         </div>
 
+        <div className="mt-7 rounded-[10px] border border-[#dfe3e9] bg-[#f8f9fc] p-4">
+          <p id="privacy-help" className="text-xs leading-5 text-[#657083]">
+            PartMatch stores your name, vehicle details, optional VIN and photo to process your request.
+            These details may be shared with participating sellers to identify a compatible headlight.
+            Upload only a photo you have permission to share. Avoid faces, license plates, documents
+            and location metadata in the photo. Choosing a file does not upload it until you submit.
+          </p>
+          <label className="mt-3 flex items-start gap-3 text-sm text-[#344054]">
+            <input
+              type="checkbox"
+              name="consent"
+              checked={consent}
+              onChange={(event) => {
+                setConsent(event.target.checked);
+                setErrors((current) => ({ ...current, consent: undefined }));
+              }}
+              aria-invalid={Boolean(errors.consent)}
+              aria-describedby={errors.consent ? "privacy-help consent-error" : "privacy-help"}
+              className="mt-1 size-4 shrink-0 accent-[#536ee8]"
+            />
+            I have permission to share these details and photo, and agree to their storage and sharing
+            with participating sellers for this request.
+          </label>
+          {errors.consent ? <p id="consent-error" className="mt-2 text-xs text-[#c64b4b]">{errors.consent}</p> : null}
+        </div>
+        </fieldset>
+
+        <p role="status" className="mt-3 text-sm text-[#657083]">
+          {isSubmitting ? "Submitting your request and photo. Please wait…" : ""}
+        </p>
+
         {submitError ? (
           <div
+            ref={feedbackRef}
+            tabIndex={-1}
             role="alert"
             className="mt-7 flex items-start gap-3 rounded-[10px] border border-[#efc4c4] bg-[#fff7f7] p-4 text-[#a23f3f]"
           >
@@ -586,20 +653,25 @@ export default function VehicleDetailsForm() {
             <div>
               <p className="text-sm font-semibold">Submission failed</p>
               <p className="mt-1 text-xs leading-5 text-[#a65b5b]">{submitError}</p>
+              {sessionExpired ? <a href="/sign-in" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-xs font-semibold underline">Sign in in a new tab, then return here and retry</a> : null}
             </div>
           </div>
         ) : null}
 
         {savedRequest ? (
-          <div role="status" aria-live="polite" className="mt-7 flex items-start gap-3 rounded-[10px] border border-[#bcded2] bg-[#f4faf8] p-4 text-[#286c59]">
+          <div ref={feedbackRef} tabIndex={-1} role="status" aria-live="polite" className="mt-7 flex items-start gap-3 rounded-[10px] border border-[#bcded2] bg-[#f4faf8] p-4 text-[#286c59]">
             <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#34866f] text-white">
               <CheckIcon />
             </span>
             <div>
               <p className="text-sm font-semibold">Request and photo submitted successfully</p>
               <p className="mt-1 text-xs leading-5 text-[#577f74]">
-                Reference {savedRequest.requestId.slice(0, 8).toUpperCase()} · {savedRequest.vehicle.customerName} · {savedRequest.vehicle.year} {savedRequest.vehicle.model} · {savedRequest.vehicle.side} · {savedRequest.photoName}
+                Reference <span className="break-all font-mono">{savedRequest.requestId}</span> · {savedRequest.vehicle.customerName} · {savedRequest.vehicle.year} {savedRequest.vehicle.model} · {savedRequest.vehicle.side} · {savedRequest.photoName}
                 {savedRequest.vehicle.vin ? ` · VIN ending in ${savedRequest.vehicle.vin.slice(-4)}` : " · No VIN provided"}.
+              </p>
+              <p className="mt-2 text-xs leading-5">
+                Status: {savedRequest.status.replaceAll("_", " ")} · Submitted {new Date(savedRequest.createdAt).toLocaleString()}.
+                Save your reference. Your request is ready for seller review; a match is not yet confirmed.
               </p>
             </div>
           </div>
@@ -610,7 +682,18 @@ export default function VehicleDetailsForm() {
             <LockIcon />
             Your VIN is used only for compatibility checks.
           </p>
-          <button
+          {savedRequest ? (
+            <button type="button" onClick={() => {
+              setSavedRequest(null);
+              setForm(initialForm);
+              setConsent(false);
+              removePhoto();
+              setErrors({});
+              requestAnimationFrame(() => document.getElementById("customer-name")?.focus());
+            }} className="h-12 rounded-[10px] bg-[#536ee8] px-6 text-sm font-semibold text-white">
+              Start another request
+            </button>
+          ) : <button
             type="submit"
             disabled={isSubmitting}
             aria-busy={isSubmitting}
@@ -629,7 +712,7 @@ export default function VehicleDetailsForm() {
                 </svg>
               </>
             )}
-          </button>
+          </button>}
         </div>
       </form>
     </div>

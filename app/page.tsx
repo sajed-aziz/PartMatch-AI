@@ -1,4 +1,6 @@
 import VehicleDetailsForm from "./components/vehicle-details-form";
+import SignOutButton from "./components/sign-out-button";
+import { getCustomer } from "@/lib/auth";
 
 function BrandMark() {
   return (
@@ -39,7 +41,8 @@ const requestSteps = [
   { number: "3", label: "Available matches", current: false },
 ] as const;
 
-export default function Home() {
+export default async function Home() {
+  const customer = await getCustomer().catch(() => null);
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f6f7f9] text-[#182033]">
       <header className="sticky top-0 z-30 border-b border-[#e5e7eb] bg-white/95 backdrop-blur-xl">
@@ -63,6 +66,7 @@ export default function Home() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-5">
+            {customer ? <SignOutButton /> : <a href="/sign-in" className="text-sm font-medium text-[#536ee8]">Sign in</a>}
             <button
               type="button"
               className="hidden items-center gap-2 text-sm font-medium text-[#667085] transition hover:text-[#182033] sm:flex"
@@ -125,7 +129,14 @@ export default function Home() {
           </ol>
 
           <section id="request-form">
-            <VehicleDetailsForm />
+            {customer ? <>
+              <p className="mb-4 text-sm text-[#697386]">Signed in as {customer.Username}</p>
+              <VehicleDetailsForm />
+            </> : <div className="rounded-2xl border border-[#dfe3e9] bg-white p-8">
+              <h2 className="text-xl font-semibold">Sign in to submit your request</h2>
+              <p className="mt-2 text-sm text-[#697386]">Use your customer account so your request is linked to you.</p>
+              <a href="/sign-in" className="mt-5 inline-flex rounded-lg bg-[#536ee8] px-5 py-3 text-sm font-semibold text-white">Sign in or create an account</a>
+            </div>}
           </section>
 
           <div className="mt-6 flex flex-col gap-2 text-xs leading-5 text-[#8a93a3] sm:flex-row sm:items-center sm:justify-between">
