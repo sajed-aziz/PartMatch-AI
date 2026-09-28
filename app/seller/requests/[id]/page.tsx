@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -18,6 +18,19 @@ type RequestDetails = {
   updatedAt: string;
 };
 
+type InventoryMatch = {
+  id: string;
+  partName: string;
+  headlightSide: string;
+  condition: string;
+  price: number;
+  available: boolean;
+  lastUpdatedAt: string;
+  yearFrom: number;
+  yearTo: number;
+  confirmed: boolean;
+};
+
 export default function SellerRequestDetails({
   params,
 }: {
@@ -28,28 +41,73 @@ export default function SellerRequestDetails({
   const [requestDetails, setRequestDetails] =
     useState<RequestDetails | null>(null);
 
+  const [matches, setMatches] = useState<InventoryMatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [matchesLoading, setMatchesLoading] = useState(true);
   const [error, setError] = useState("");
+  const [matchError, setMatchError] = useState("");
+  const [matchMessage, setMatchMessage] = useState("");
+  const [confirmingId, setConfirmingId] = useState("");
+
+  const loadRequest = useCallback(async () => {
+    const response = await fetch(`/api/requests/${id}`, {
+      cache: "no-store",
+    });
+
+    const data = (await response.json()) as {
+      request?: RequestDetails;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not load request.");
+    }
+
+    setRequestDetails(data.request || null);
+  }, [id]);
+
+  const loadMatches = useCallback(async () => {
+    setMatchesLoading(true);
+    setMatchError("");
+
+    try {
+      const response = await fetch(`/api/requests/${id}/matches`, {
+        cache: "no-store",
+      });
+
+      const data = (await response.json()) as {
+        matches?: InventoryMatch[];
+        message?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Could not load compatible inventory.",
+        );
+      }
+
+      setMatches(data.matches || []);
+      setMatchMessage(data.message || "");
+    } catch (reason) {
+      setMatchError(
+        reason instanceof Error
+          ? reason.message
+          : "Could not load compatible inventory.",
+      );
+    } finally {
+      setMatchesLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
-    async function loadRequest() {
+    async function loadPage() {
       try {
-        const response = await fetch(`/api/requests/${id}`);
-
-        const data = (await response.json()) as {
-          request?: RequestDetails;
-          error?: string;
-        };
-
-        if (!response.ok) {
-          throw new Error(data.error || "Could not load request.");
-        }
-
-        setRequestDetails(data.request || null);
-      } catch (error) {
+        await loadRequest();
+      } catch (reason) {
         setError(
-          error instanceof Error
-            ? error.message
+          reason instanceof Error
+            ? reason.message
             : "Could not load request.",
         );
       } finally {
@@ -57,8 +115,42 @@ export default function SellerRequestDetails({
       }
     }
 
-    loadRequest();
-  }, [id]);
+    loadPage();
+    loadMatches();
+  }, [loadRequest, loadMatches]);
+
+  async function confirmMatch(partId: string) {
+    setConfirmingId(partId);
+    setMatchError("");
+
+    try {
+      const response = await fetch(`/api/requests/${id}/matches`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ partId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          data.error || "Could not confirm inventory match.",
+        );
+      }
+
+      await Promise.all([loadRequest(), loadMatches()]);
+    } catch (reason) {
+      setMatchError(
+        reason instanceof Error
+          ? reason.message
+          : "Could not confirm inventory match.",
+      );
+    } finally {
+      setConfirmingId("");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-[#182033]">
@@ -74,12 +166,21 @@ export default function SellerRequestDetails({
             </p>
           </div>
 
-          <Link
-            href="/seller"
-            className="text-sm font-medium text-[#536ee8] hover:underline"
-          >
-            Back to requests
-          </Link>
+          <div className="flex items-center gap-5">
+            <Link
+              href="/seller/inventory"
+              className="text-sm font-medium text-[#536ee8] hover:underline"
+            >
+              Inventory
+            </Link>
+
+            <Link
+              href="/seller"
+              className="text-sm font-medium text-[#536ee8] hover:underline"
+            >
+              Back to requests
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -127,7 +228,8 @@ export default function SellerRequestDetails({
               </div>
 
               <p className="mt-2 text-sm text-[#697386]">
-                Review the customer&apos;s vehicle and headlight information.
+                Review the customer&apos;s vehicle and headlight
+                information.
               </p>
             </div>
 
@@ -205,6 +307,107 @@ export default function SellerRequestDetails({
                 </p>
               </section>
             </div>
+
+            <section className="mt-6 rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
+              <div className="mb-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#536ee8]">
+                  Compatible inventory
+                </p>
+
+                <h2 className="mt-1 text-xl font-semibold">
+                  Available matches
+                </h2>
+
+                <p className="mt-1 text-sm text-[#697386]">
+                  Available seller-confirmed inventory matching the
+                  customer&apos;s year and requested headlight side.
+                </p>
+              </div>
+
+              {matchesLoading && (
+                <p className="text-sm text-[#697386]">
+                  Checking inventory...
+                </p>
+              )}
+
+              {!matchesLoading && matchError && (
+                <p className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
+                  {matchError}
+                </p>
+              )}
+
+              {!matchesLoading &&
+                !matchError &&
+                matchMessage && (
+                  <p className="rounded-lg bg-[#f6f7f9] p-4 text-sm text-[#697386]">
+                    {matchMessage}
+                  </p>
+                )}
+
+              {!matchesLoading &&
+                !matchError &&
+                !matchMessage &&
+                matches.length === 0 && (
+                  <p className="rounded-lg bg-[#f6f7f9] p-4 text-sm text-[#697386]">
+                    No compatible available inventory was found.
+                  </p>
+                )}
+
+              {!matchesLoading &&
+                !matchError &&
+                matches.length > 0 && (
+                  <div className="space-y-3">
+                    {matches.map((part) => (
+                      <div
+                        key={part.id}
+                        className="flex flex-col justify-between gap-4 rounded-xl border border-[#e1e4e8] p-4 sm:flex-row sm:items-center"
+                      >
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold">
+                              {part.partName}
+                            </p>
+
+                            {part.confirmed && (
+                              <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">
+                                Confirmed match
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-1 text-sm text-[#697386]">
+                            {part.headlightSide} · {part.condition}
+                          </p>
+
+                          <p className="mt-1 text-sm text-[#697386]">
+                            Compatible: {part.yearFrom}–{part.yearTo}
+                          </p>
+
+                          <p className="mt-2 font-semibold">
+                            ${part.price.toFixed(2)}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={
+                            part.confirmed ||
+                            confirmingId !== ""
+                          }
+                          onClick={() => confirmMatch(part.id)}
+                          className="h-10 rounded-lg bg-[#182033] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {part.confirmed
+                            ? "Confirmed"
+                            : confirmingId === part.id
+                              ? "Confirming..."
+                              : "Confirm part"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </section>
 
             <div className="mt-6">
               <Link
