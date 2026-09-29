@@ -115,8 +115,12 @@ export default function SellerRequestDetails({
       }
     }
 
-    loadPage();
-    loadMatches();
+    const timer = window.setTimeout(() => {
+      void loadPage();
+      void loadMatches();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadRequest, loadMatches]);
 
   async function confirmMatch(partId: string) {
