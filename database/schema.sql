@@ -204,3 +204,38 @@ BEGIN
         ON dbo.PartCompatibility (PartId);
 END;
 GO
+
+
+
+
+
+/* SCRUM-26/27: confirmed inventory match for a customer request */
+
+IF OBJECT_ID(N'dbo.RequestMatches', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.RequestMatches
+    (
+        MatchId UNIQUEIDENTIFIER NOT NULL
+            CONSTRAINT PK_RequestMatches PRIMARY KEY
+            CONSTRAINT DF_RequestMatches_MatchId DEFAULT NEWSEQUENTIALID(),
+
+        RequestId UNIQUEIDENTIFIER NOT NULL,
+        PartId UNIQUEIDENTIFIER NOT NULL,
+
+        ConfirmedAt DATETIME2(3) NOT NULL
+            CONSTRAINT DF_RequestMatches_ConfirmedAt DEFAULT SYSUTCDATETIME(),
+
+        CONSTRAINT FK_RequestMatches_CustomerRequests
+            FOREIGN KEY (RequestId)
+            REFERENCES dbo.CustomerRequests(RequestId)
+            ON DELETE CASCADE,
+
+        CONSTRAINT FK_RequestMatches_InventoryParts
+            FOREIGN KEY (PartId)
+            REFERENCES dbo.InventoryParts(PartId),
+
+        CONSTRAINT UQ_RequestMatches_RequestId
+            UNIQUE (RequestId)
+    );
+END;
+GO
