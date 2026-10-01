@@ -1,3 +1,5 @@
+import { requireAccess, requestAccessFilter, uuidPattern } from "@/lib/request-access";
+import { isSameOrigin, privateJson } from "@/lib/http";
 import { getSqlServerConnection, SqlServerConfigurationError } from "@/lib/sql-server";
 
 export const runtime = "nodejs";
@@ -20,7 +22,10 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const access = await requireAccess();
+  if (access.response) return access.response;
   const { id } = await params;
+  if (!uuidPattern.test(id)) return privateJson({ error: "Not found." }, 404);
 
   try {
     const { pool, driver } = await getSqlServerConnection();
@@ -28,6 +33,8 @@ export async function GET(
     const result = await pool
       .request()
       .input("requestId", driver.UniqueIdentifier, id)
+      .input("customerId", driver.UniqueIdentifier, access.customer.CustomerId)
+      .input("isSeller", driver.Bit, Boolean(access.customer.IsSeller))
       .query<RequestDetailsRow>(`
         SELECT
           CONVERT(varchar(36), RequestId) AS RequestId,
@@ -42,19 +49,19 @@ export async function GET(
           CreatedAt,
           UpdatedAt
         FROM dbo.CustomerRequests
-        WHERE RequestId = @requestId;
+        WHERE RequestId = @requestId AND ${requestAccessFilter};
       `);
 
     const customerRequest = result.recordset[0];
 
     if (!customerRequest) {
-      return Response.json(
+      return secureJson(
         { error: "Request not found." },
         { status: 404 }
       );
     }
 
-    return Response.json({
+    return secureJson({
       request: {
         id: customerRequest.RequestId,
         customerName: customerRequest.CustomerName,
@@ -70,18 +77,50 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Seller request detail retrieval failed", error);
+    console.error("Seller request detail retrieval failed", { category: "storage" });
 
     if (error instanceof SqlServerConfigurationError) {
-      return Response.json(
+      return secureJson(
         { error: "The request service is not configured yet." },
         { status: 503 }
       );
     }
 
-    return Response.json(
+    return secureJson(
       { error: "The request could not be loaded." },
       { status: 500 }
     );
+  }
+}
+function secureJson(body: unknown, options?: { status: number }) {
+  return privateJson(body, options?.status ?? 200);
+}
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requireAccess(undefined, true);
+  if (access.response) return access.response;
+  if (!isSameOrigin(request)) return privateJson({ error: "Use the PartMatch website." }, 403);
+  const { id } = await params;
+  if (!uuidPattern.test(id)) return privateJson({ error: "Request not found." }, 404);
+  let status: string;
+  try { status = (await request.json()).status; } catch {
+    return privateJson({ error: "Provide a valid status." }, 400);
+  }
+  if (!["under_review", "closed"].includes(status)) return privateJson({ error: "Select under review or closed." }, 400);
+  try {
+    const { pool, driver } = await getSqlServerConnection();
+    const result = await pool.request()
+      .input("requestId", driver.UniqueIdentifier, id)
+      .input("status", driver.VarChar(30), status)
+      .query(`
+        UPDATE dbo.CustomerRequests SET Status = @status, UpdatedAt = SYSUTCDATETIME()
+        WHERE RequestId = @requestId AND ConsentVersion IS NOT NULL AND ConsentAcceptedAt IS NOT NULL
+          AND ((@status = 'under_review' AND Status = 'submitted') OR (@status = 'closed' AND Status <> 'closed'));
+        SELECT @@ROWCOUNT AS UpdatedRows;
+      `);
+    if (!result.recordset[0]?.UpdatedRows) return privateJson({ error: "Request unavailable or status has changed. Refresh and try again." }, 409);
+    return privateJson({ ok: true }, 200);
+  } catch {
+    return privateJson({ error: "Status could not be updated." }, 500);
   }
 }

@@ -18,6 +18,12 @@ BEGIN
 END;
 GO
 
+-- Seller privileges are assigned by an administrator, never during signup.
+IF COL_LENGTH(N'dbo.Customers', N'IsSeller') IS NULL
+    ALTER TABLE dbo.Customers ADD IsSeller BIT NOT NULL
+        CONSTRAINT DF_Customers_IsSeller DEFAULT 0;
+GO
+
 IF OBJECT_ID(N'dbo.CustomerSessions', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.CustomerSessions (

@@ -90,7 +90,7 @@ it("signs in with valid credentials without returning credentials or tokens", as
     .mockResolvedValueOnce({ recordset: [{ CustomerId: "owner", PasswordHash: await hashPassword("a long test password") }] });
   const response = await POST(authRequest("signin"));
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ ok: true });
+  expect(await response.json()).toEqual({ ok: true, redirectTo: "/" });
   expect(mocks.set).toHaveBeenCalled();
 });
 
@@ -101,4 +101,12 @@ it("creates an account using a password hash", async () => {
   expect(response.status).toBe(200);
   const storedHash = mocks.input.mock.calls.find(([name]) => name === "passwordHash")![2];
   expect(await verifyPassword("a long test password", storedHash)).toBe(true);
+});
+
+it("sends verified sellers to the seller dashboard", async () => {
+  mocks.query.mockResolvedValueOnce({ recordset: [{ Attempts: 1 }] })
+    .mockResolvedValueOnce({ recordset: [{ CustomerId: "seller", IsSeller: true, PasswordHash: await hashPassword("a long test password") }] });
+  const response = await POST(authRequest("signin"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true, redirectTo: "/seller" });
 });

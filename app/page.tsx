@@ -1,6 +1,8 @@
 import VehicleDetailsForm from "./components/vehicle-details-form";
 import SignOutButton from "./components/sign-out-button";
 import { getCustomer } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import NotificationLink from "./components/notification-link";
 
 function BrandMark() {
   return (
@@ -42,7 +44,8 @@ const requestSteps = [
 ] as const;
 
 export default async function Home() {
-  const customer = await getCustomer().catch(() => null);
+  const customer = await getCustomer();
+  if (customer?.IsSeller) redirect("/seller");
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f6f7f9] text-[#182033]">
       <header className="sticky top-0 z-30 border-b border-[#e5e7eb] bg-white/95 backdrop-blur-xl">
@@ -77,6 +80,7 @@ export default async function Home() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-5">
+            {customer ? <NotificationLink /> : null}
             {customer ? <SignOutButton /> : <a href="/sign-in" className="text-sm font-medium text-[#536ee8]">Sign in</a>}
             <button
               type="button"

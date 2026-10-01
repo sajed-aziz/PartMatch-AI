@@ -1,3 +1,4 @@
+import { requireAccess } from "@/lib/request-access";
 import { getSqlServerConnection, SqlServerConfigurationError } from "@/lib/sql-server";
 import { getCustomer } from "@/lib/auth";
 import { isSameOrigin, privateJson } from "@/lib/http";
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
     return privateJson({ error: "Unable to verify your session. Please try again later." }, 503);
   }
   if (!customer) return privateJson({ error: "Sign in before submitting a request." }, 401);
+  if (customer.IsSeller) return privateJson({ error: "Customer access is required to submit a request." }, 403);
   const contentLength = Number(request.headers.get("content-length"));
 
   if (Number.isFinite(contentLength) && contentLength > maximumRequestSize) {
@@ -217,6 +219,9 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
+  const access = await requireAccess(undefined, true);
+  if (access.response) return access.response;
+
   try {
     const { pool } = await getSqlServerConnection();
 
@@ -233,10 +238,11 @@ export async function GET() {
         CreatedAt,
         UpdatedAt
       FROM dbo.CustomerRequests
+      WHERE ConsentVersion IS NOT NULL AND ConsentAcceptedAt IS NOT NULL
       ORDER BY CreatedAt DESC;
     `);
 
-    return Response.json({
+    return secureJson({
       requests: result.recordset.map((request) => ({
         id: request.RequestId,
         customerName: request.CustomerName,
@@ -251,18 +257,21 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("Seller request retrieval failed", error);
+    console.error("Seller request retrieval failed", { category: "storage" });
 
     if (error instanceof SqlServerConfigurationError) {
-      return Response.json(
+      return secureJson(
         { error: "The request service is not configured yet." },
         { status: 503 },
       );
     }
 
-    return Response.json(
+    return secureJson(
       { error: "The requests could not be loaded. Please try again." },
       { status: 500 },
     );
   }
+}
+function secureJson(body: unknown, options?: { status: number }) {
+  return privateJson(body, options?.status ?? 200);
 }

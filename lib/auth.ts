@@ -33,8 +33,8 @@ export async function getCustomer() {
   const { pool, driver } = await getSqlServerConnection();
   const result = await pool.request()
     .input("tokenHash", driver.Char(64), tokenHash(token))
-    .query<{ CustomerId: string; Username: string }>(`
-      SELECT CONVERT(varchar(36), c.CustomerId) AS CustomerId, c.Username
+    .query<{ CustomerId: string; Username: string; IsSeller: boolean }>(`
+      SELECT CONVERT(varchar(36), c.CustomerId) AS CustomerId, c.Username, c.IsSeller
       FROM dbo.CustomerSessions s
       JOIN dbo.Customers c ON c.CustomerId = s.CustomerId
       WHERE s.TokenHash = @tokenHash AND s.ExpiresAt > SYSUTCDATETIME();

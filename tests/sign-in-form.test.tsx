@@ -48,3 +48,11 @@ it("allows account creation from the sign-in page", async () => {
   await user.click(screen.getByRole("button", { name: "Create account" }));
   expect(JSON.parse(fetchMock.mock.calls[0][1].body).action).toBe("signup");
 });
+
+it("opens the seller dashboard after seller sign-in", async () => {
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true, redirectTo: "/seller" }) });
+  const user = await fill();
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  await vi.waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/seller"));
+  expect(navigation.refresh).toHaveBeenCalled();
+});
