@@ -130,9 +130,9 @@ export async function POST(request: Request) {
     return validationError("The photo must be a JPG, PNG, WebP, HEIC, HEIF, or AVIF image.");
   }
 
-  if (photo.size > maximumPhotoSize) {
-    return validationError("The photo must be smaller than 10 MB.");
-  }
+if (photo.size > maximumPhotoSize) {
+  return validationError("The photo must be 10 MB or smaller.");
+}
 
   try {
     const photoData = Buffer.from(await photo.arrayBuffer());
