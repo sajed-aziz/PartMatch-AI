@@ -62,7 +62,18 @@ export default async function Home() {
             >
               Find a part
             </a>
-            <span className="text-sm font-medium text-[#8a93a3]">My requests</span>
+            {customer ? (
+              <a
+                href="/my-requests"
+                className="text-sm font-medium text-[#667085] transition hover:text-[#182033]"
+              >
+                My requests
+              </a>
+            ) : (
+              <span className="text-sm font-medium text-[#8a93a3]">
+                My requests
+              </span>
+            )}
           </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-5">

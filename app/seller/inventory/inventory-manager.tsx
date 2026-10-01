@@ -53,8 +53,12 @@ export default function InventoryManager() {
   }, []);
 
   useEffect(() => {
-    loadInventory();
-  }, [loadInventory]);
+    const timer = window.setTimeout(() => {
+        void loadInventory();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+    }, [loadInventory]);
 
   async function addPart(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
