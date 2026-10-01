@@ -26,7 +26,7 @@ export default function SignInForm() {
       });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || "Unable to sign in. Please try again.");
-      router.replace("/");
+      router.replace(result.redirectTo === "/seller" ? "/seller" : "/");
       router.refresh();
     } catch (reason) {
       setError(reason instanceof Error && reason.name === "TimeoutError"

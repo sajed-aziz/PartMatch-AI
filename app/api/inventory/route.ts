@@ -1,3 +1,5 @@
+import { privateJson, isSameOrigin } from "@/lib/http";
+import { requireAccess } from "@/lib/request-access";
 import {
   getSqlServerConnection,
   SqlServerConfigurationError,
@@ -21,6 +23,9 @@ type InventoryRow = {
 };
 
 export async function GET() {
+  const access = await requireAccess(undefined, true);
+  if (access.response) return access.response;
+
   try {
     const { pool } = await getSqlServerConnection();
 
@@ -44,7 +49,7 @@ export async function GET() {
       ORDER BY p.LastUpdatedAt DESC;
     `);
 
-    return Response.json({
+    return secureJson({
       inventory: result.recordset.map((part) => ({
         id: part.PartId,
         partName: part.PartName,
@@ -63,16 +68,16 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("Inventory retrieval failed", error);
+    console.error("Inventory retrieval failed", { category: "storage" });
 
     if (error instanceof SqlServerConfigurationError) {
-      return Response.json(
+      return secureJson(
         { error: "The inventory service is not configured yet." },
         { status: 503 },
       );
     }
 
-    return Response.json(
+    return secureJson(
       { error: "The inventory could not be loaded. Please try again." },
       { status: 500 },
     );
@@ -82,6 +87,10 @@ export async function GET() {
 
 
 export async function POST(request: Request) {
+  const access = await requireAccess(undefined, true);
+  if (access.response) return access.response;
+  if (!isSameOrigin(request)) return privateJson({ error: "Use the PartMatch website." }, 403);
+
   try {
     const body = await request.json();
 
@@ -93,7 +102,7 @@ export async function POST(request: Request) {
     const yearTo = Number(body.yearTo);
 
     if (!partName) {
-      return Response.json(
+      return secureJson(
         { error: "Part name is required." },
         { status: 400 },
       );
@@ -104,21 +113,21 @@ export async function POST(request: Request) {
         headlightSide,
       )
     ) {
-      return Response.json(
+      return secureJson(
         { error: "Select a valid headlight side." },
         { status: 400 },
       );
     }
 
     if (!["new", "used", "refurbished"].includes(condition)) {
-      return Response.json(
+      return secureJson(
         { error: "Select a valid condition." },
         { status: 400 },
       );
     }
 
     if (!Number.isFinite(price) || price < 0) {
-      return Response.json(
+      return secureJson(
         { error: "Enter a valid price." },
         { status: 400 },
       );
@@ -131,7 +140,7 @@ export async function POST(request: Request) {
       yearTo > 2014 ||
       yearFrom > yearTo
     ) {
-      return Response.json(
+      return secureJson(
         { error: "Enter a valid compatibility year range." },
         { status: 400 },
       );
@@ -201,7 +210,7 @@ export async function POST(request: Request) {
 
       await transaction.commit();
 
-      return Response.json(
+      return secureJson(
         { ok: true, id: partId },
         { status: 201 },
       );
@@ -210,11 +219,14 @@ export async function POST(request: Request) {
       throw error;
     }
   } catch (error) {
-    console.error("Inventory creation failed", error);
+    console.error("Inventory creation failed", { category: error instanceof SqlServerConfigurationError ? "configuration" : "storage" });
 
-    return Response.json(
+    return secureJson(
       { error: "The inventory part could not be created." },
       { status: 500 },
     );
   }
+}
+function secureJson(body: unknown, options?: { status: number }) {
+  return privateJson(body, options?.status ?? 200);
 }

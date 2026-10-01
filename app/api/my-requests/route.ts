@@ -4,6 +4,7 @@ import {
   SqlServerConfigurationError,
 } from "@/lib/sql-server";
 import { privateJson } from "@/lib/http";
+import { getSellerContact } from "@/lib/seller-contact";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,13 @@ type CustomerRequestRow = {
   HeadlightSide: string;
   Status: string;
   CreatedAt: Date;
+  UpdatedAt: Date;
+  IsAvailable: boolean;
+  SellerConfirmed: boolean;
+  CancelledAt: Date | null;
+  FeedbackRating: number | null;
+  FeedbackComment: string | null;
+  FeedbackCreatedAt: Date | null;
 
   PartId: string | null;
   PartName: string | null;
@@ -41,6 +49,10 @@ export async function GET() {
     );
   }
 
+  if (customer.IsSeller) {
+    return privateJson({ error: "Customer access is required to view request history." }, 403);
+  }
+
   try {
     const { pool, driver } = await getSqlServerConnection();
 
@@ -59,12 +71,19 @@ export async function GET() {
           r.HeadlightSide,
           r.Status,
           r.CreatedAt,
+          r.UpdatedAt,
+          r.CancelledAt,
+          f.Rating AS FeedbackRating,
+          f.Comment AS FeedbackComment,
+          f.CreatedAt AS FeedbackCreatedAt,
 
           CONVERT(varchar(36), p.PartId) AS PartId,
           p.PartName,
           p.PartCondition,
           p.Price,
-          p.LastUpdatedAt
+          p.LastUpdatedAt,
+          p.IsAvailable,
+          p.SellerConfirmed
 
         FROM dbo.CustomerRequests AS r
 
@@ -73,6 +92,9 @@ export async function GET() {
 
         LEFT JOIN dbo.InventoryParts AS p
           ON p.PartId = m.PartId
+
+        LEFT JOIN dbo.CustomerRequestFeedback AS f
+          ON f.RequestId = r.RequestId AND f.CustomerId = @customerId
 
         WHERE r.CustomerId = @customerId
 
@@ -88,6 +110,13 @@ export async function GET() {
           headlightSide: request.HeadlightSide,
           status: request.Status,
           createdAt: request.CreatedAt.toISOString(),
+          updatedAt: request.UpdatedAt.toISOString(),
+          cancelledAt: request.CancelledAt?.toISOString() ?? null,
+          feedback: request.FeedbackRating == null ? null : {
+            rating: request.FeedbackRating,
+            comment: request.FeedbackComment ?? "",
+            createdAt: request.FeedbackCreatedAt?.toISOString() ?? null,
+          },
 
           confirmedPart: request.PartId
             ? {
@@ -95,6 +124,8 @@ export async function GET() {
                 partName: request.PartName,
                 condition: request.PartCondition,
                 price: Number(request.Price),
+                available: Boolean(request.IsAvailable && request.SellerConfirmed),
+                sellerContact: request.Status !== "closed" && request.IsAvailable && request.SellerConfirmed ? getSellerContact() : null,
                 lastUpdatedAt:
                   request.LastUpdatedAt?.toISOString() ?? null,
               }

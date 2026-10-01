@@ -24,6 +24,7 @@ export async function POST(request: Request) {
 
     const { pool, driver } = await getSqlServerConnection();
     let customerId: string;
+    let redirectTo = "/";
     if (body.action === "signup") {
       const passwordHash = await hashPassword(password);
       const result = await pool.request()
@@ -37,17 +38,18 @@ export async function POST(request: Request) {
       customerId = result.recordset[0].CustomerId;
     } else {
       const result = await pool.request().input("username", driver.VarChar(40), username)
-        .query<{ CustomerId: string; PasswordHash: string }>(`
-          SELECT CONVERT(varchar(36), CustomerId) AS CustomerId, PasswordHash FROM dbo.Customers WHERE Username = @username;
+        .query<{ CustomerId: string; PasswordHash: string; IsSeller: boolean }>(`
+          SELECT CONVERT(varchar(36), CustomerId) AS CustomerId, PasswordHash, IsSeller FROM dbo.Customers WHERE Username = @username;
         `);
       const customer = result.recordset[0];
       // Do equivalent password work for unknown usernames.
       const valid = await verifyPassword(password, customer?.PasswordHash ?? `${"0".repeat(32)}:${"0".repeat(128)}`);
       if (!customer || !valid) return privateJson({ error: "Incorrect username or password." }, 401);
       customerId = customer.CustomerId;
+      if (customer.IsSeller) redirectTo = "/seller";
     }
     await createSession(customerId);
-    return privateJson({ ok: true }, 200);
+    return privateJson({ ok: true, redirectTo }, 200);
   } catch (error) {
     const code = error && typeof error === "object" && "number" in error ? error.number : null;
     if (code === 2601 || code === 2627) return privateJson({ error: "That username is unavailable. Choose another or sign in." }, 409);

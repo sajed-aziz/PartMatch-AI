@@ -28,6 +28,13 @@ beforeEach(() => {
 });
 
 describe("customer submission privacy", () => {
+  it("blocks seller submissions before storage", async () => {
+    sql.customer.mockResolvedValueOnce({ CustomerId: "seller", IsSeller: true });
+    const response = await POST(request());
+    expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(sql.connect).not.toHaveBeenCalled();
+  });
   it("rejects unauthenticated customers before storage", async () => {
     sql.customer.mockResolvedValueOnce(null);
     expect((await POST(request())).status).toBe(401);

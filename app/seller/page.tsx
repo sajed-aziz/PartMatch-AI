@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import SignOutButton from "@/app/components/sign-out-button";
 
 type SellerRequest = {
   id: string;
@@ -21,10 +22,13 @@ export default function SellerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [revision, setRevision] = useState(0);
+
   useEffect(() => {
     async function loadRequests() {
+      setLoading(true); setError("");
       try {
-        const response = await fetch("/api/requests");
+        const response = await fetch("/api/requests", { cache: "no-store" });
 
         const data = (await response.json()) as {
           requests?: SellerRequest[];
@@ -48,7 +52,7 @@ export default function SellerDashboard() {
     }
 
     loadRequests();
-  }, []);
+  }, [revision]);
 
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-[#182033]">
@@ -61,12 +65,7 @@ export default function SellerDashboard() {
             <p className="text-xs text-[#8a93a3]">Seller Portal</p>
           </div>
 
-          <Link
-            href="/"
-            className="text-sm font-medium text-[#536ee8] hover:underline"
-          >
-            Customer portal
-          </Link>
+          <SignOutButton />
         </div>
       </header>
 
@@ -97,7 +96,9 @@ export default function SellerDashboard() {
             <p className="font-medium text-red-700">
               Requests could not be loaded
             </p>
-            <p className="mt-1 text-sm text-red-600">{error}</p>
+            <p role="alert" className="mt-1 text-sm text-red-600">{error}</p>
+            <button type="button" onClick={() => setRevision(value => value + 1)} className="mt-3 text-sm underline">Try again</button>
+            <Link href="/sign-in" className="ml-4 text-sm underline">Sign in</Link>
           </div>
         )}
 

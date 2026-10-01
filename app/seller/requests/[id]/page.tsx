@@ -3,6 +3,8 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import InventoryFreshness from "@/app/components/inventory-freshness";
+import RequestProgress from "@/app/components/request-progress";
 
 type RequestDetails = {
   id: string;
@@ -48,6 +50,10 @@ export default function SellerRequestDetails({
   const [matchError, setMatchError] = useState("");
   const [matchMessage, setMatchMessage] = useState("");
   const [confirmingId, setConfirmingId] = useState("");
+  const [photoError, setPhotoError] = useState(false);
+  const [photoLoaded, setPhotoLoaded] = useState(false);
+  const [photoRevision, setPhotoRevision] = useState(0);
+  const [updating, setUpdating] = useState(false);
 
   const loadRequest = useCallback(async () => {
     const response = await fetch(`/api/requests/${id}`, {
@@ -63,7 +69,8 @@ export default function SellerRequestDetails({
       throw new Error(data.error || "Could not load request.");
     }
 
-    setRequestDetails(data.request || null);
+    if (!data.request) throw new Error("Request not found.");
+    setRequestDetails(data.request);
   }, [id]);
 
   const loadMatches = useCallback(async () => {
@@ -122,6 +129,23 @@ export default function SellerRequestDetails({
 
     return () => window.clearTimeout(timer);
   }, [loadRequest, loadMatches]);
+
+  async function retryRequest() {
+    setLoading(true); setError("");
+    try { await loadRequest(); } catch { setError("Request could not be loaded. Sign in with an authorized account or try again."); }
+    finally { setLoading(false); }
+  }
+
+  async function updateStatus(status: string) {
+    setUpdating(true); setMatchError("");
+    try {
+      const response = await fetch(`/api/requests/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Status could not be updated.");
+      await loadRequest();
+    } catch (reason) { setMatchError(reason instanceof Error ? reason.message : "Status could not be updated."); }
+    finally { setUpdating(false); }
+  }
 
   async function confirmMatch(partId: string) {
     setConfirmingId(partId);
@@ -211,6 +235,8 @@ export default function SellerRequestDetails({
             >
               Return to seller dashboard
             </Link>
+            <button type="button" onClick={() => void retryRequest()} className="ml-4 text-sm underline">Try again</button>
+            <Link href="/sign-in" className="ml-4 text-sm underline">Sign in</Link>
           </div>
         )}
 
@@ -237,6 +263,11 @@ export default function SellerRequestDetails({
               </p>
             </div>
 
+            <div className="mb-6">
+              <RequestProgress status={requestDetails.status} updatedAt={requestDetails.updatedAt} />
+              {requestDetails.status === "submitted" && <button type="button" disabled={updating} onClick={() => void updateStatus("under_review")} className="mt-4 rounded-lg border bg-white px-4 py-2 text-sm">{updating ? "Updating..." : "Start review"}</button>}
+              {requestDetails.status !== "closed" && <button type="button" disabled={updating || confirmingId !== ""} onClick={() => void updateStatus("closed")} className="ml-3 mt-4 rounded-lg border bg-white px-4 py-2 text-sm">Close request</button>}
+            </div>
             <div className="grid gap-6 lg:grid-cols-2">
               <section className="rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
                 <h2 className="mb-5 text-lg font-semibold">
@@ -295,13 +326,18 @@ export default function SellerRequestDetails({
                 </div>
 
                 <div className="overflow-hidden rounded-xl border border-[#e1e4e8] bg-[#f8f9fb]">
-                  <Image
-                    src={`/api/requests/${requestDetails.id}/photo`}
+                  {!photoLoaded && !photoError && <p role="status" className="p-4 text-sm">Loading photo...</p>}
+                  {photoError ? <div role="alert" className="p-4 text-sm"><p>Photo preview unavailable. Your browser may not support this image format.</p><a href={`/api/requests/${requestDetails.id}/photo`} target="_blank" rel="noreferrer" className="mt-2 inline-block underline">Open original photo</a><button type="button" className="ml-4 underline" onClick={() => { setPhotoError(false); setPhotoLoaded(false); setPhotoRevision(value => value + 1); }}>Retry photo</button></div> : <Image
+                    key={photoRevision}
+                    unoptimized
+                    onLoad={() => setPhotoLoaded(true)}
+                    onError={() => setPhotoError(true)}
+                    src={`/api/requests/${requestDetails.id}/photo?retry=${photoRevision}`}
                     alt="Customer uploaded headlight"
                     width={800}
                     height={600}
                     className="max-h-[500px] w-full object-contain"
-                  />
+                  />}
                 </div>
 
                 <p className="mt-4 text-xs leading-5 text-[#8a93a3]">
@@ -335,9 +371,7 @@ export default function SellerRequestDetails({
               )}
 
               {!matchesLoading && matchError && (
-                <p className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
-                  {matchError}
-                </p>
+<div role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{matchError}<button type="button" onClick={() => void loadMatches()} className="ml-4 underline">Retry inventory</button></div>
               )}
 
               {!matchesLoading &&
@@ -390,12 +424,13 @@ export default function SellerRequestDetails({
                           <p className="mt-2 font-semibold">
                             ${part.price.toFixed(2)}
                           </p>
+                          <InventoryFreshness updatedAt={part.lastUpdatedAt} />
                         </div>
 
                         <button
                           type="button"
                           disabled={
-                            part.confirmed ||
+                            requestDetails.status === "closed" || updating || part.confirmed ||
                             confirmingId !== ""
                           }
                           onClick={() => confirmMatch(part.id)}
