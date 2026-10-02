@@ -21,6 +21,7 @@ export default function SellerDashboard() {
   const [requests, setRequests] = useState<SellerRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const [revision, setRevision] = useState(0);
 
@@ -54,6 +55,11 @@ export default function SellerDashboard() {
     loadRequests();
   }, [revision]);
 
+  const filteredRequests =
+    statusFilter === "all"
+      ? requests
+      : requests.filter((request) => request.status === statusFilter);
+
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-[#182033]">
       <header className="border-b border-[#e5e7eb] bg-white">
@@ -85,6 +91,29 @@ export default function SellerDashboard() {
           </p>
         </div>
 
+        <div className="mb-6 flex flex-wrap gap-2">
+          {[
+            { label: "All", value: "all" },
+            { label: "Submitted", value: "submitted" },
+            { label: "Under review", value: "under_review" },
+            { label: "Matched", value: "matched" },
+            { label: "Closed", value: "closed" },
+          ].map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              onClick={() => setStatusFilter(filter.value)}
+              className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                statusFilter === filter.value
+                  ? "border-[#536ee8] bg-[#536ee8] text-white"
+                  : "border-[#d8dce3] bg-white text-[#697386] hover:bg-[#f4f5f7]"
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
         {loading && (
           <div className="rounded-xl border border-[#e1e4e8] bg-white p-6 text-sm text-[#697386]">
             Loading requests...
@@ -111,9 +140,21 @@ export default function SellerDashboard() {
           </div>
         )}
 
-        {!loading && !error && requests.length > 0 && (
+        {!loading &&
+          !error &&
+          requests.length > 0 &&
+          filteredRequests.length === 0 && (
+            <div className="rounded-xl border border-[#e1e4e8] bg-white p-8 text-center">
+              <p className="font-medium">No requests with this status.</p>
+              <p className="mt-2 text-sm text-[#8a93a3]">
+                Choose another status to view incoming requests.
+              </p>
+            </div>
+          )}
+
+        {!loading && !error && filteredRequests.length > 0 && (
           <div className="space-y-4">
-            {requests.map((request) => (
+            {filteredRequests.map((request) => (
               <article
                 key={request.id}
                 className="rounded-xl border border-[#e1e4e8] bg-white p-5 shadow-sm"
