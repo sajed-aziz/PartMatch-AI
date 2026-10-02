@@ -100,6 +100,13 @@ IF COL_LENGTH(N'dbo.CustomerRequests', N'ConsentAcceptedAt') IS NULL
     ALTER TABLE dbo.CustomerRequests ADD ConsentAcceptedAt DATETIME2(3) NULL;
 GO
 
+/* SCRUM-40: Internal seller note for customer requests */
+
+IF COL_LENGTH(N'dbo.CustomerRequests', N'SellerNote') IS NULL
+    ALTER TABLE dbo.CustomerRequests
+        ADD SellerNote NVARCHAR(500) NULL;
+GO
+
 IF OBJECT_ID(N'dbo.CK_CustomerRequests_PhotoSize', N'C') IS NOT NULL
 BEGIN
     ALTER TABLE dbo.CustomerRequests
