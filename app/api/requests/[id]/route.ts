@@ -169,11 +169,26 @@ export async function PATCH(
     );
   }
 
-  try {
-    const { pool, driver } =
-      await getSqlServerConnection();
+    // Validate the requested update before connecting to storage.
+    if (!("sellerNote" in body)) {
+      const status = body.status;
 
-    // SCRUM-40: Save seller internal note
+      if (
+        !status ||
+        !["under_review", "closed"].includes(status)
+      ) {
+        return privateJson(
+          { error: "Select under review or closed." },
+          400,
+        );
+      }
+    }
+
+    try {
+      const { pool, driver } =
+        await getSqlServerConnection();
+
+      // SCRUM-40: Save seller internal note
     if ("sellerNote" in body) {
       const sellerNote =
         typeof body.sellerNote === "string"
@@ -226,20 +241,7 @@ export async function PATCH(
     }
 
     // SCRUM-39: Update seller request status
-    const status = body.status;
-
-    if (
-      !status ||
-      !["under_review", "closed"].includes(status)
-    ) {
-      return privateJson(
-        {
-          error:
-            "Select under review or closed.",
-        },
-        400,
-      );
-    }
+        const status = body.status!;
 
     const result = await pool
       .request()
