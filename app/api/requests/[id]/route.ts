@@ -24,6 +24,10 @@ type RequestDetailsRow = {
   CreatedAt: Date;
   UpdatedAt: Date;
   SellerNote: string | null;
+  CancelledAt: Date | null;
+  FeedbackRating: number | null;
+  FeedbackComment: string | null;
+  FeedbackCreatedAt: Date | null;
 };
 
 export async function GET(
@@ -60,22 +64,28 @@ export async function GET(
       )
       .query<RequestDetailsRow>(`
         SELECT
-          CONVERT(varchar(36), RequestId) AS RequestId,
-          CustomerName,
-          VehicleModel,
-          VehicleYear,
-          Vin,
-          HeadlightSide,
-          PhotoFileName,
-          PhotoMimeType,
-          Status,
-          CreatedAt,
-          UpdatedAt,
-          SellerNote
-        FROM dbo.CustomerRequests
+          CONVERT(varchar(36), r.RequestId) AS RequestId,
+          r.CustomerName,
+          r.VehicleModel,
+          r.VehicleYear,
+          r.Vin,
+          r.HeadlightSide,
+          r.PhotoFileName,
+          r.PhotoMimeType,
+          r.Status,
+          r.CreatedAt,
+          r.UpdatedAt,
+          r.SellerNote,
+          r.CancelledAt,
+          f.Rating AS FeedbackRating,
+          f.Comment AS FeedbackComment,
+          f.CreatedAt AS FeedbackCreatedAt
+        FROM dbo.CustomerRequests AS r
+        LEFT JOIN dbo.CustomerRequestFeedback AS f
+          ON f.RequestId = r.RequestId
         WHERE
-          RequestId = @requestId
-          AND ${requestAccessFilter};
+          r.RequestId = @requestId
+          AND ${requestAccessFilter.replace(/\bCustomerId\b/g, "r.CustomerId")};
       `);
 
     const customerRequest = result.recordset[0];
@@ -101,6 +111,15 @@ export async function GET(
         createdAt: customerRequest.CreatedAt.toISOString(),
         updatedAt: customerRequest.UpdatedAt.toISOString(),
         sellerNote: customerRequest.SellerNote,
+        cancelledAt: customerRequest.CancelledAt?.toISOString() ?? null,
+        feedback: customerRequest.FeedbackRating
+          ? {
+              rating: customerRequest.FeedbackRating,
+              comment: customerRequest.FeedbackComment ?? "",
+              createdAt:
+                customerRequest.FeedbackCreatedAt?.toISOString() ?? null,
+            }
+          : null,
       },
     });
   } catch (error) {

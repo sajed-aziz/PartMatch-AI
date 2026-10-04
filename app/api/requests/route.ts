@@ -46,6 +46,7 @@ type SellerRequestRow = {
   Status: string;
   CreatedAt: Date;
   UpdatedAt: Date;
+  CancelledAt: Date | null;
 };
 
 function readText(formData: FormData, name: string) {
@@ -236,7 +237,8 @@ export async function GET() {
         PhotoFileName,
         Status,
         CreatedAt,
-        UpdatedAt
+        UpdatedAt,
+        CancelledAt
       FROM dbo.CustomerRequests
       WHERE ConsentVersion IS NOT NULL AND ConsentAcceptedAt IS NOT NULL
       ORDER BY CreatedAt DESC;
@@ -254,6 +256,7 @@ export async function GET() {
         status: request.Status,
         createdAt: request.CreatedAt.toISOString(),
         updatedAt: request.UpdatedAt.toISOString(),
+        cancelledAt: request.CancelledAt?.toISOString() ?? null,
       })),
     });
   } catch (error) {
