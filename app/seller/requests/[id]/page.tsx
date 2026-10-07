@@ -438,6 +438,16 @@ const [noteMessage, setNoteMessage] = useState("");
                   ${confirmedMatch.price.toFixed(2)}
                 </p>
 
+                <p
+                  className={`mt-2 text-sm font-semibold ${
+                    confirmedMatch.available ? "text-green-700" : "text-red-700"
+                  }`}
+                >
+                  {confirmedMatch.available
+                    ? "Currently available"
+                    : "No longer available"}
+                </p>
+
                 <InventoryFreshness updatedAt={confirmedMatch.lastUpdatedAt} />
               </section>
             )}

@@ -97,7 +97,7 @@ export async function GET(
           ON rm.RequestId = @requestId
           AND rm.PartId = p.PartId
         WHERE
-          p.IsAvailable = 1
+          (p.IsAvailable = 1 OR rm.PartId IS NOT NULL)
           AND p.SellerConfirmed = 1
           AND p.HeadlightSide = @headlightSide
           AND c.VehicleMake = 'Mercedes-Benz'
