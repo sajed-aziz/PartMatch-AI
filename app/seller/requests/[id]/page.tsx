@@ -214,6 +214,8 @@ const [noteMessage, setNoteMessage] = useState("");
     }
   }
 
+  const confirmedMatch = matches.find((part) => part.confirmed);
+
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-[#182033]">
       <header className="border-b border-[#e5e7eb] bg-white">
@@ -413,6 +415,32 @@ const [noteMessage, setNoteMessage] = useState("");
                 )}
               </div>
             </section>
+
+            {confirmedMatch && (
+              <section className="mt-6 rounded-xl border border-green-200 bg-green-50 p-6 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-green-700">
+                  Confirmed match
+                </p>
+
+                <h2 className="mt-1 text-xl font-semibold">
+                  {confirmedMatch.partName}
+                </h2>
+
+                <p className="mt-2 text-sm text-[#697386]">
+                  {confirmedMatch.headlightSide} · {confirmedMatch.condition}
+                </p>
+
+                <p className="mt-1 text-sm text-[#697386]">
+                  Compatible: {confirmedMatch.yearFrom}–{confirmedMatch.yearTo}
+                </p>
+
+                <p className="mt-3 font-semibold">
+                  ${confirmedMatch.price.toFixed(2)}
+                </p>
+
+                <InventoryFreshness updatedAt={confirmedMatch.lastUpdatedAt} />
+              </section>
+            )}
 
             <section className="mt-6 rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
               <div className="mb-5">
