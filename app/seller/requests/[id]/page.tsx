@@ -18,6 +18,7 @@ type RequestDetails = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  sellerNote: string | null;
 };
 
 type InventoryMatch = {
@@ -54,6 +55,9 @@ export default function SellerRequestDetails({
   const [photoLoaded, setPhotoLoaded] = useState(false);
   const [photoRevision, setPhotoRevision] = useState(0);
   const [updating, setUpdating] = useState(false);
+  const [sellerNote, setSellerNote] = useState("");
+const [savingNote, setSavingNote] = useState(false);
+const [noteMessage, setNoteMessage] = useState("");
 
   const loadRequest = useCallback(async () => {
     const response = await fetch(`/api/requests/${id}`, {
@@ -70,7 +74,9 @@ export default function SellerRequestDetails({
     }
 
     if (!data.request) throw new Error("Request not found.");
+
     setRequestDetails(data.request);
+    setSellerNote(data.request.sellerNote ?? "");
   }, [id]);
 
   const loadMatches = useCallback(async () => {
@@ -145,6 +151,34 @@ export default function SellerRequestDetails({
       await loadRequest();
     } catch (reason) { setMatchError(reason instanceof Error ? reason.message : "Status could not be updated."); }
     finally { setUpdating(false); }
+  }
+
+  async function saveNote() {
+    setSavingNote(true);
+    setNoteMessage("");
+
+    try {
+      const response = await fetch(`/api/requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sellerNote }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Note could not be saved.");
+      }
+
+      setNoteMessage("Seller note saved.");
+      await loadRequest();
+    } catch (reason) {
+      setNoteMessage(
+        reason instanceof Error ? reason.message : "Note could not be saved."
+      );
+    } finally {
+      setSavingNote(false);
+    }
   }
 
   async function confirmMatch(partId: string) {
@@ -347,6 +381,38 @@ export default function SellerRequestDetails({
                 </p>
               </section>
             </div>
+
+            <section className="mt-6 rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-semibold">Seller note</h2>
+
+              <p className="mt-1 text-sm text-[#697386]">
+                Add an internal note about this customer request.
+              </p>
+
+              <textarea
+                value={sellerNote}
+                onChange={(event) => setSellerNote(event.target.value)}
+                maxLength={500}
+                rows={4}
+                placeholder="Example: Customer needs original left headlight..."
+                className="mt-4 w-full rounded-lg border border-[#d8dce3] p-3 text-sm outline-none focus:border-[#536ee8]"
+              />
+
+              <div className="mt-3 flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => void saveNote()}
+                  disabled={savingNote}
+                  className="rounded-lg bg-[#182033] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {savingNote ? "Saving..." : "Save note"}
+                </button>
+
+                {noteMessage && (
+                  <p className="text-sm text-[#697386]">{noteMessage}</p>
+                )}
+              </div>
+            </section>
 
             <section className="mt-6 rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
               <div className="mb-5">
