@@ -117,7 +117,7 @@ GO
 ALTER TABLE dbo.CustomerRequests WITH CHECK
     ADD CONSTRAINT CK_CustomerRequests_PhotoSize
         CHECK (PhotoSizeBytes BETWEEN 1 AND 10485760);
-G
+GO
 
 /* 
    SCRUM-11: Seller inventory and vehicle compatibility
@@ -175,7 +175,7 @@ BEGIN
     CREATE INDEX IX_InventoryParts_Availability
         ON dbo.InventoryParts (IsAvailable, LastUpdatedAt DESC);
 END;
-G
+GO
 
 IF OBJECT_ID(N'dbo.PartCompatibility', N'U') IS NULL
 BEGIN
@@ -212,7 +212,7 @@ BEGIN
     CREATE INDEX IX_PartCompatibility_PartId
         ON dbo.PartCompatibility (PartId);
 END;
-G
+GO
 
 /* SCRUM-26/27: confirmed inventory match for a customer request */
 

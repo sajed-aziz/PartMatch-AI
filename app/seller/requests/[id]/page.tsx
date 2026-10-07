@@ -19,6 +19,12 @@ type RequestDetails = {
   createdAt: string;
   updatedAt: string;
   sellerNote: string | null;
+  cancelledAt: string | null;
+  feedback: {
+    rating: number;
+    comment: string;
+    createdAt: string | null;
+  } | null;
 };
 
 type InventoryMatch = {
@@ -301,8 +307,35 @@ const [noteMessage, setNoteMessage] = useState("");
 
             <div className="mb-6">
               <RequestProgress status={requestDetails.status} updatedAt={requestDetails.updatedAt} />
-              {requestDetails.status === "submitted" && <button type="button" disabled={updating} onClick={() => void updateStatus("under_review")} className="mt-4 rounded-lg border bg-white px-4 py-2 text-sm">{updating ? "Updating..." : "Start review"}</button>}
-              {requestDetails.status !== "closed" && <button type="button" disabled={updating || confirmingId !== ""} onClick={() => void updateStatus("closed")} className="ml-3 mt-4 rounded-lg border bg-white px-4 py-2 text-sm">Close request</button>}
+              {requestDetails.cancelledAt ? (
+                <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">
+                  This request was cancelled by the customer.
+                </p>
+              ) : (
+                <>
+                  {requestDetails.status === "submitted" && (
+                    <button
+                      type="button"
+                      disabled={updating}
+                      onClick={() => void updateStatus("under_review")}
+                      className="mt-4 rounded-lg border bg-white px-4 py-2 text-sm"
+                    >
+                      {updating ? "Updating..." : "Start review"}
+                    </button>
+                  )}
+
+                  {requestDetails.status !== "closed" && (
+                    <button
+                      type="button"
+                      disabled={updating || confirmingId !== ""}
+                      onClick={() => void updateStatus("closed")}
+                      className="ml-3 mt-4 rounded-lg border bg-white px-4 py-2 text-sm"
+                    >
+                      Close request
+                    </button>
+                  )}
+                </>
+              )}
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
               <section className="rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
@@ -415,6 +448,31 @@ const [noteMessage, setNoteMessage] = useState("");
                 )}
               </div>
             </section>
+
+              {requestDetails.feedback && (
+                <section className="mt-6 rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#536ee8]">
+                    Customer feedback
+                  </p>
+
+                  <h2 className="mt-1 text-lg font-semibold">
+                    {requestDetails.feedback.rating}/5 rating
+                  </h2>
+
+                  <p className="mt-3 text-sm text-[#697386]">
+                    {requestDetails.feedback.comment || "No comment provided."}
+                  </p>
+
+                  {requestDetails.feedback.createdAt && (
+                    <p className="mt-3 text-xs text-[#9aa2af]">
+                      Submitted{" "}
+                      {new Date(
+                        requestDetails.feedback.createdAt,
+                      ).toLocaleString()}
+                    </p>
+                  )}
+                </section>
+              )}
 
             {confirmedMatch && (
               <section className="mt-6 rounded-xl border border-green-200 bg-green-50 p-6 shadow-sm">

@@ -41,8 +41,7 @@ Seller accounts are restricted to the seller portal. Visiting `/` or `/my-reques
 
 The pilot has one shared seller inventory. Set `SELLER_CONTACT_NAME` and `SELLER_CONTACT_PHONE` in `.env.local` (phone in international format, e.g. `+` followed by 8?15 digits), then restart the app. An available confirmed part on an open request shows a **Contact seller** phone action. Missing or invalid configuration produces an explicit unavailable message. Multiple independent sellers need per-seller inventory ownership and contact profiles before rollout.
 
-Matched parts show their current availability and inventory update time. Updates older than seven days, or missing update times, require reconfirmation. Loading, empty and failure states include recovery actions; photo failures offer retry and access to the original file, including formats unsupported by the browser.
-
+Matched parts show their current availability and inventory update time. Updates older than seven days, or missing update times, require reconfirmation. Loading, empty and failure states include recovery actions; photo failures offer retry and access to the original file, including formats unsupported by the browser
 
 Consent version `2026-09-25`: the customer confirms permission to share the submitted details and photo and agrees to their storage and sharing with participating sellers for the request. New submissions record this version and a server-generated UTC timestamp.
 
