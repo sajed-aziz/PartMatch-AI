@@ -58,6 +58,62 @@ Apply `database/sprint4.sql` after the base schema. Both scripts are safe to rer
 
 This sprint adds only customer follow-up features and database event capture. Seller notes, filtering, match-detail screens and inventory-change handling remain separate seller tasks.
 
+## Sprint 5: Preliminary AI headlight identification (tasks 1-2)
+
+`POST /api/ai/analyze` accepts a multipart upload before customer request submission. It requires a signed-in customer, the same-origin checks used by the other customer APIs, and exactly one of each field:
+
+| Field | Value |
+| --- | --- |
+| `model` | `Mercedes-Benz C-Class (W204)` |
+| `year` | A four-digit year from 2007 to 2014 |
+| `photo` | One JPG, PNG, or WebP file, up to 10 MB |
+| `aiConsent` | The literal string `true`, after the customer explicitly agrees to AI photo processing |
+
+AI consent is separate from the existing permission to store and share a customer request with sellers. The eventual caller must explain AI photo processing before requesting that consent. The endpoint does not create a request, store the photo, update inventory, or approve compatibility. Only vehicle model/year and photo bytes are passed to the analyzer, without customer name, VIN, or the uploaded filename.
+
+The actual upload stream is limited to 11 MB, including multipart overhead, even without an accurate `Content-Length`. File signatures must match the declared JPG/PNG/WebP type; this is a header check, not full image decoding. HEIC, HEIF, and AVIF remain supported by normal request submission, but are not accepted by this AI endpoint.
+
+The endpoint uses **free local inference** with Ollama and Gemma 3 4B. It calls only `http://127.0.0.1:11434/api/chat`, with no API key, billing account, hosted fallback, or external photo transfer. The Next.js server and Ollama must run on the same computer. A website deployed elsewhere cannot reach your laptop through its own loopback address. The customer form will be connected in a later task.
+
+Install [Ollama for Windows](https://docs.ollama.com/windows), then open a new PowerShell terminal. Disable Ollama's cloud features before starting or restarting Ollama:
+
+```powershell
+[Environment]::SetEnvironmentVariable("OLLAMA_NO_CLOUD", "1", "User")
+$env:OLLAMA_NO_CLOUD = "1"
+```
+
+Quit and reopen Ollama after changing that setting. Then download the local vision model and check that it is installed:
+
+```powershell
+ollama pull gemma3:4b
+ollama list
+```
+
+If the Ollama background app is not running, run `ollama serve` in a separate terminal and leave it open. Restart Next.js with `npm run dev`. The defaults work without adding any AI setting to `.env.local`. `OLLAMA_VISION_MODEL` optionally selects `gemma3:4b-it-qat` instead, which must also be downloaded first. These are the only two accepted local model tags; unsupported and cloud model tags are rejected. The service URL is fixed to loopback and redirects are blocked. `OLLAMA_NO_CLOUD` must be set for the Ollama process itself; putting it only in Next.js's `.env.local` does not configure an already-running Ollama service.
+
+The Gemma 3 4B model download is about 3.4 GB, in addition to the Ollama installation. After installation and model download, analysis uses your own computer's GPU/CPU, RAM, and electricity, without per-request fees. Speed depends on available hardware. If the service/model is unavailable, the endpoint returns **503** and the customer can continue with seller review. The app does not download models automatically.
+
+The analyzer identifies only a likely front headlight and its vehicle-relative side. It requests an unknown result for unclear/unrelated photos and an unknown side for detached lamps, tight crops, uncertain/mirrored orientation, or insufficient visible vehicle context. An internal `sideEvidence` field must indicate vehicle-position evidence before a left/right result is returned; it is not exposed in the public response. This is a model-reported evidence signal, not independently verified compatibility or calibrated confidence. Human confirmation remains mandatory.
+
+Each attempt makes one local chat request, with a two-minute timeout for model loading/inference, a 256-token generation limit, a 2048-token context window, and temperature 0. The model stays loaded for two minutes after use. Photo bytes are sent as base64 to the local service after AI consent; original embedded image metadata is not stripped. Ollama's non-streaming JSON response is checked against the expected result shape. Service failures and incomplete results produce **503**, and malformed responses produce **502**. The integration does not automatically retry. See the official [vision guide](https://docs.ollama.com/capabilities/vision), [structured-output guide](https://docs.ollama.com/capabilities/structured-outputs), and [model documentation](https://ollama.com/library/gemma3:4b).
+
+The response contract for a connected provider is:
+
+```json
+{
+  "analysis": { "part": "front_headlight", "side": "unknown" },
+  "preliminary": true,
+  "requiresSellerConfirmation": true,
+  "notice": "This is a preliminary suggestion. A seller must confirm the part, compatibility, and availability."
+}
+```
+
+`part` is `front_headlight` or `unknown`; `side` is `left`, `right`, or `unknown`, using the vehicle's left/right as viewed from inside facing forward. An unknown part must have an unknown side. Extra provider fields are not returned. All handler responses use `Cache-Control: no-store` and provider errors are not logged or disclosed.
+
+Status codes: **200** for a valid preliminary/inconclusive result; **400** for invalid fields or malformed uploads; **401** for no session; **403** for seller/cross-site access; **413** for excessive upload size; **415** for unsupported content/image types; **502** for invalid provider output; **503** for session verification or local AI service/model unavailability. Next.js handles unsupported methods with **405**.
+
+`tests/ai-analysis-api.test.ts` exercises access controls, actual upload limits, consent, validation, and the endpoint contract. `tests/ollama-headlight-analyzer.test.ts` checks the real adapter's local-only request, accepted model tags, response parsing, unknown-side handling, timeouts, and sanitized errors with mocked HTTP. The endpoint also exercises the real adapter with mocked HTTP. These checks do not establish live recognition accuracy; test with seller-authorized, labelled headlight photos after downloading the model and starting Ollama.
+
 ## Verification
 
 ```bash
