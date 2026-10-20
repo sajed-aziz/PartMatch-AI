@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 type InventoryPart = {
   id: string;
@@ -24,6 +24,58 @@ export default function InventoryManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [sideFilter, setSideFilter] = useState("all");
+  const [conditionFilter, setConditionFilter] = useState("all");
+  const [availabilityFilter, setAvailabilityFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+
+  const filteredParts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return parts
+      .filter((part) => {
+        const matchesSearch = part.partName.toLowerCase().includes(query);
+        const matchesSide =
+          sideFilter === "all" || part.headlightSide === sideFilter;
+        const matchesCondition =
+          conditionFilter === "all" || part.condition === conditionFilter;
+        const matchesAvailability =
+          availabilityFilter === "all" ||
+          String(part.available) === availabilityFilter;
+
+        return (
+          matchesSearch &&
+          matchesSide &&
+          matchesCondition &&
+          matchesAvailability
+        );
+      })
+      .sort((a, b) => {
+        if (sortBy === "price-low") return a.price - b.price;
+        if (sortBy === "price-high") return b.price - a.price;
+        if (sortBy === "oldest") {
+          return (
+            new Date(a.lastUpdatedAt).getTime() -
+            new Date(b.lastUpdatedAt).getTime()
+          );
+        }
+
+        return (
+          new Date(b.lastUpdatedAt).getTime() -
+          new Date(a.lastUpdatedAt).getTime()
+        );
+      });
+  }, [parts, search, sideFilter, conditionFilter, availabilityFilter, sortBy]);
+
+  function resetFilters() {
+    setSearch("");
+    setSideFilter("all");
+    setConditionFilter("all");
+    setAvailabilityFilter("all");
+    setSortBy("newest");
+  }
 
   const loadInventory = useCallback(async () => {
     setLoading(true);
@@ -278,6 +330,89 @@ export default function InventoryManager() {
           </button>
         </div>
 
+        <div className="mb-5 rounded-2xl border border-[#dfe3e9] bg-white p-5">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <label className="text-sm font-medium">
+              Search parts
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by part name..."
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              />
+            </label>
+
+            <label className="text-sm font-medium">
+              Headlight side
+              <select
+                value={sideFilter}
+                onChange={(event) => setSideFilter(event.target.value)}
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              >
+                <option value="all">All sides</option>
+                <option value="Left (driver side)">Left (driver side)</option>
+                <option value="Right (passenger side)">Right (passenger side)</option>
+              </select>
+            </label>
+
+            <label className="text-sm font-medium">
+              Condition
+              <select
+                value={conditionFilter}
+                onChange={(event) => setConditionFilter(event.target.value)}
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              >
+                <option value="all">All conditions</option>
+                <option value="new">New</option>
+                <option value="used">Used</option>
+                <option value="refurbished">Refurbished</option>
+              </select>
+            </label>
+
+            <label className="text-sm font-medium">
+              Availability
+              <select
+                value={availabilityFilter}
+                onChange={(event) => setAvailabilityFilter(event.target.value)}
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              >
+                <option value="all">All parts</option>
+                <option value="true">Available</option>
+                <option value="false">Unavailable</option>
+              </select>
+            </label>
+
+            <label className="text-sm font-medium">
+              Sort by
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              >
+                <option value="newest">Recently updated</option>
+                <option value="oldest">Least recently updated</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+              </select>
+            </label>
+
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="h-11 w-full rounded-lg border border-[#cfd5dd] px-4 text-sm font-medium hover:bg-gray-50"
+              >
+                Reset filters
+              </button>
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm text-[#697386]">
+            Showing {filteredParts.length} of {parts.length} inventory parts
+          </p>
+        </div>
+
         {error && (
           <div
             role="alert"
@@ -297,7 +432,13 @@ export default function InventoryManager() {
           </div>
         ) : (
           <div className="space-y-4">
-            {parts.map((part) => (
+            {filteredParts.length === 0 && (
+              <div className="rounded-2xl border border-[#dfe3e9] bg-white p-6 text-sm text-[#697386]">
+                No inventory parts match your search or filters.
+              </div>
+            )}
+
+            {filteredParts.map((part) => (
               <article
                 key={part.id}
                 className="rounded-2xl border border-[#dfe3e9] bg-white p-6"
