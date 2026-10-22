@@ -69,6 +69,40 @@ it("rejects invalid IDs before querying storage", async () => {
   expect(mocks.connect).not.toHaveBeenCalled();
 });
 
+it.each([false, true])("keeps internal seller notes restricted to seller responses (seller=%s)", async isSeller => {
+  mocks.customer.mockResolvedValue({ CustomerId: "owner", IsSeller: isSeller });
+  mocks.query.mockResolvedValue({ recordset: [{ RequestId: id, SellerNote: "Internal seller-only note", CreatedAt: new Date(), UpdatedAt: new Date() }] });
+  const response = await details(request, context);
+  expect(response.status).toBe(200);
+  const data = await response.json();
+  if (isSeller) expect(data.request.sellerNote).toBe("Internal seller-only note");
+  else {
+    expect(data.request).not.toHaveProperty("sellerNote");
+    expect(JSON.stringify(data)).not.toContain("Internal seller-only note");
+  }
+  expect(mocks.query.mock.calls[0][0]).toContain("CASE WHEN @isSeller = 1 THEN r.SellerNote ELSE NULL END AS SellerNote");
+});
+
+it.each(["{", "null", "[]", '"invalid"', '{"partId":42}'])("rejects malformed match data without accessing storage (%s)", async body => {
+  mocks.customer.mockResolvedValue({ CustomerId: "seller", IsSeller: true });
+  const response = await confirm(new Request(request.url, { method: "POST", body }), context);
+  expect(response.status).toBe(400);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(mocks.connect).not.toHaveBeenCalled();
+});
+
+it.each([null, 42, {}, ["note"]])("rejects non-text seller notes instead of clearing an existing note (%s)", async sellerNote => {
+  mocks.customer.mockResolvedValue({ CustomerId: "seller", IsSeller: true });
+  expect((await PATCH(new Request(request.url, { method: "PATCH", body: JSON.stringify({ sellerNote }) }), context)).status).toBe(400);
+  expect(mocks.connect).not.toHaveBeenCalled();
+});
+
+it("rejects mixed note and status updates before storage", async () => {
+  mocks.customer.mockResolvedValue({ CustomerId: "seller", IsSeller: true });
+  expect((await PATCH(new Request(request.url, { method: "PATCH", body: JSON.stringify({ sellerNote: "note", status: "closed" }) }), context)).status).toBe(400);
+  expect(mocks.connect).not.toHaveBeenCalled();
+});
+
 it("returns private photos with safe headers and filenames", async () => {
   mocks.query.mockResolvedValue({ recordset: [{ PhotoData: Buffer.from("photo"), PhotoMimeType: "image/png", PhotoFileName: 'bad"\r\nname.png' }] });
   const response = await photo(request, context);
@@ -122,4 +156,37 @@ it("validates and confirms matches inside one transaction with locked current av
   expect(mocks.query.mock.calls[0][0]).toContain("WITH (UPDLOCK, HOLDLOCK)");
   expect(mocks.query.mock.calls[0][0]).toContain("r.Status <> 'closed'");
   expect(mocks.query.mock.calls[1][0]).toContain("DELETE FROM dbo.RequestMatches\n          WHERE RequestId = @requestId;");
+});
+
+it.each(["Left (driver side)", "Right (passenger side)"])("lets only a seller save a reviewed side before matching (%s)", async headlightSide => {
+  mocks.customer.mockResolvedValue({ CustomerId: "seller", IsSeller: true });
+  mocks.connect.mockResolvedValue({ pool: { request: () => ({ input: mocks.input, query: mocks.query }) }, driver: { UniqueIdentifier: "uuid", NVarChar: () => "side" } });
+  mocks.query.mockResolvedValue({ recordset: [{ UpdatedRows: 1 }] });
+  const response = await PATCH(new Request(request.url, { method: "PATCH", body: JSON.stringify({ headlightSide }) }), context);
+  expect(response.status).toBe(200);
+  expect(mocks.input).toHaveBeenCalledWith("headlightSide", "side", headlightSide);
+  const query = mocks.query.mock.calls[0][0];
+  expect(query).toContain("Status = 'under_review'");
+  expect(query).toContain("r.Status IN ('submitted', 'under_review')");
+  expect(query).toContain("r.CancelledAt IS NULL");
+  expect(query).toContain("NOT EXISTS (SELECT 1 FROM dbo.RequestMatches");
+  expect(query).not.toContain("INSERT INTO dbo.RequestMatches");
+});
+
+it("denies customer attempts to change the seller-reviewed side", async () => {
+  expect((await PATCH(new Request(request.url, { method: "PATCH", body: JSON.stringify({ headlightSide: "Left (driver side)" }) }), context)).status).toBe(403);
+  expect(mocks.connect).not.toHaveBeenCalled();
+});
+
+it.each([null, [], { headlightSide: "Not sure" }, { headlightSide: ["Left (driver side)"] }, { headlightSide: "Left (driver side)", status: "matched" }])("rejects invalid side-review data before storage (%s)", async body => {
+  mocks.customer.mockResolvedValue({ CustomerId: "seller", IsSeller: true });
+  expect((await PATCH(new Request(request.url, { method: "PATCH", body: JSON.stringify(body) }), context)).status).toBe(400);
+  expect(mocks.connect).not.toHaveBeenCalled();
+});
+
+it("returns a conflict if a side cannot be changed after matching, closure or cancellation", async () => {
+  mocks.customer.mockResolvedValue({ CustomerId: "seller", IsSeller: true });
+  mocks.connect.mockResolvedValue({ pool: { request: () => ({ input: mocks.input, query: mocks.query }) }, driver: { UniqueIdentifier: "uuid", NVarChar: () => "side" } });
+  mocks.query.mockResolvedValue({ recordset: [{ UpdatedRows: 0 }] });
+  expect((await PATCH(new Request(request.url, { method: "PATCH", body: JSON.stringify({ headlightSide: "Left (driver side)" }) }), context)).status).toBe(409);
 });

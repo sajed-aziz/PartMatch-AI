@@ -15,6 +15,38 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+it.each([
+  ["empty", new File([], "empty.png", { type: "image/png" }), "Choose a non-empty headlight photo."],
+  ["oversized", new File([new Uint8Array(10 * 1024 * 1024 + 1)], "large.png", { type: "image/png" }), "Choose a photo of 10 MB or smaller."],
+  ["renamed text", new File(["text"], "fake.jpg", { type: "text/plain" }), "Choose a JPG, PNG, WebP, HEIC, HEIF, or AVIF image."],
+  ["GIF", new File(["gif"], "animated.gif", { type: "image/gif" }), "Choose a JPG, PNG, WebP, HEIC, HEIF, or AVIF image."],
+  ["SVG", new File(["<svg/>"], "drawing.svg", { type: "image/svg+xml" }), "Choose a JPG, PNG, WebP, HEIC, HEIF, or AVIF image."],
+] as const)("rejects %s files immediately, even when the picker accept filter is bypassed", (_kind, photo, message) => {
+  render(<VehicleDetailsForm />);
+  const input = screen.getByLabelText(/Headlight photo/);
+  fireEvent.change(input, { target: { files: [photo] } });
+  expect(screen.getByRole("alert")).toHaveTextContent(message);
+  expect(input).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByText("No image selected.")).toBeVisible();
+  expect(screen.queryByRole("region", { name: "Optional photo analysis" })).toBeNull();
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("accepts exactly 10 MB, clears an earlier error, and removes a previous preview after invalid replacement", () => {
+  render(<VehicleDetailsForm />);
+  const input = screen.getByLabelText(/Headlight photo/);
+  fireEvent.change(input, { target: { files: [new File([], "empty.png", { type: "image/png" })] } });
+  fireEvent.change(input, { target: { files: [new File([new Uint8Array(10 * 1024 * 1024)], "limit.png", { type: "image/png" })] } });
+  expect(screen.getByText("limit.png")).toBeVisible();
+  expect(input).toHaveAttribute("aria-invalid", "false");
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.change(input, { target: { files: [new File(["text"], "fake.png", { type: "text/plain" })] } });
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:photo");
+  expect(screen.queryByText("limit.png")).toBeNull();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
 async function fillForm(consent = true) {
   const user = userEvent.setup();
   render(<VehicleDetailsForm />);
@@ -24,7 +56,7 @@ async function fillForm(consent = true) {
   await user.click(screen.getByRole("radio", { name: /Not sure/ }));
   const photo = document.getElementById("headlight-photo") as HTMLInputElement;
   await user.upload(photo, new File(["photo"], "headlight.png", { type: "image/png" }));
-  if (consent) await user.click(screen.getByRole("checkbox"));
+  if (consent) await user.click(screen.getByRole("checkbox", { name: /I have permission to share these details and photo/ }));
   return user;
 }
 
@@ -53,7 +85,7 @@ it("locks pending requests, shows the complete receipt and requires a fresh form
   expect(fetchMock).toHaveBeenCalledTimes(1);
   await user.click(screen.getByRole("button", { name: "Start another request" }));
   expect(screen.getByLabelText(/Customer full name/)).toHaveValue("");
-  expect(screen.getByRole("checkbox")).not.toBeChecked();
+  expect(screen.getByRole("checkbox", { name: /I have permission to share these details and photo/ })).not.toBeChecked();
   expect(screen.getByText("No image selected.")).toBeVisible();
 });
 

@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import PhotoAnalysis from "./photo-analysis";
+import { photoInputAccept, validatePhotoMetadata } from "@/lib/photo-validation";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -46,17 +48,7 @@ const initialForm: VehicleForm = {
 
 const supportedYears = Array.from({ length: 8 }, (_, index) => String(2014 - index));
 const vinPattern = /^[A-HJ-NPR-Z0-9]{17}$/;
-const acceptedPhotoTypes = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "image/avif",
-];
-const acceptedPhotoExtension = /\.(jpe?g|png|webp|heic|heif|avif)$/i;
 const previewablePhotoTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-const maximumPhotoSize = 10 * 1024 * 1024;
 
 const headlightSides = [
   { value: "Left (driver side)", label: "Left", description: "Driver side" },
@@ -105,6 +97,7 @@ function formatFileSize(bytes: number) {
 export default function VehicleDetailsForm() {
   const [form, setForm] = useState<VehicleForm>(initialForm);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [photoRevision, setPhotoRevision] = useState(0);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [savedRequest, setSavedRequest] = useState<SavedRequest | null>(null);
@@ -141,27 +134,18 @@ export default function VehicleDetailsForm() {
   }
 
   function selectPhoto(selectedPhoto: File) {
+    setPhotoRevision(current => current + 1);
     setSavedRequest(null);
     setSubmitError(null);
 
-    if (
-      !acceptedPhotoTypes.includes(selectedPhoto.type) &&
-      !acceptedPhotoExtension.test(selectedPhoto.name)
-    ) {
+    const photoError = validatePhotoMetadata(selectedPhoto);
+    if (photoError) {
       setPhoto(null);
       setPhotoPreview(null);
       setErrors((current) => ({
         ...current,
-        photo: "Choose a JPG, PNG, WebP, HEIC, HEIF, or AVIF image.",
+        photo: photoError.error,
       }));
-      if (photoInputRef.current) photoInputRef.current.value = "";
-      return;
-    }
-
-    if (selectedPhoto.size > maximumPhotoSize) {
-      setPhoto(null);
-      setPhotoPreview(null);
-      setErrors((current) => ({ ...current, photo: "Choose an image smaller than 10 MB." }));
       if (photoInputRef.current) photoInputRef.current.value = "";
       return;
     }
@@ -292,7 +276,7 @@ export default function VehicleDetailsForm() {
         </div>
         <div className="flex items-center gap-2 text-xs font-medium text-[#707a8b]">
           <span className="size-1.5 rounded-full bg-[#536ee8]" />
-          Manual request
+          Seller review required
         </div>
       </div>
 
@@ -540,7 +524,7 @@ export default function VehicleDetailsForm() {
                     id="headlight-photo"
                     name="photo"
                     type="file"
-                    accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif"
+                    accept={photoInputAccept}
                     onClick={(event) => {
                       event.currentTarget.value = "";
                     }}
@@ -598,7 +582,7 @@ export default function VehicleDetailsForm() {
               </div>
             </div>
             {errors.photo ? (
-              <p id="photo-error" className="mt-2 text-xs font-medium text-[#c64b4b]">
+              <p id="photo-error" role="alert" className="mt-2 text-xs font-medium text-[#c64b4b]">
                 {errors.photo}
               </p>
             ) : (
@@ -606,6 +590,11 @@ export default function VehicleDetailsForm() {
                 Photograph the full front headlight in good lighting and keep the damage visible.
               </p>
             )}
+            {photo && !savedRequest ? <PhotoAnalysis key={`${photoRevision}:${form.model}:${form.year}`} photo={photo}
+              model={form.model} year={form.year} disabled={isSubmitting}
+              onChoosePhoto={() => photoInputRef.current?.click()}
+              selectedSide={form.side === headlightSides[0].value ? "left" : form.side === headlightSides[1].value ? "right" : form.side ? "unknown" : null}
+              onSelectSide={side => updateField("side", side === "left" ? headlightSides[0].value : side === "right" ? headlightSides[1].value : headlightSides[2].value)} /> : null}
           </div>
         </div>
 
@@ -614,7 +603,8 @@ export default function VehicleDetailsForm() {
             PartMatch stores your name, vehicle details, optional VIN and photo to process your request.
             These details may be shared with participating sellers to identify a compatible headlight.
             Upload only a photo you have permission to share. Avoid faces, license plates, documents
-            and location metadata in the photo. Choosing a file does not upload it until you submit.
+            and location metadata in the photo. Choosing a file alone does not upload it. Analyze photo sends
+            the photo, model and year for local AI processing. Submit request sends your details and photo for seller review.
           </p>
           <label className="mt-3 flex items-start gap-3 text-sm text-[#344054]">
             <input

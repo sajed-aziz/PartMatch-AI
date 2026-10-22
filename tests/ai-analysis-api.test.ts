@@ -12,6 +12,11 @@ import { AIProviderError } from "@/lib/ollama-headlight-analyzer";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5WQAAAAASUVORK5CYII=", "base64");
 const crossSiteHeaders: Record<string, string>[] = [
   { origin: "https://other.example" },
+  { origin: "http://localhost:3001" },
+  { origin: "https://localhost:3000" },
+  { origin: "null" },
+  { origin: "http://localhost:3000.attacker.example" },
+  { origin: "https://other.example", "sec-fetch-site": "same-site", "x-forwarded-host": "other.example" },
   { "sec-fetch-site": "cross-site" },
 ];
 function form() {
@@ -30,6 +35,10 @@ function request(body = form(), headers: Record<string, string> = {}) {
 async function expectPrivate(response: Response, status: number) {
   expect(response.status).toBe(status);
   expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  expect(response.headers.get("access-control-allow-origin")).toBeNull();
+  expect(response.headers.get("access-control-allow-credentials")).toBeNull();
+  expect(response.headers.get("set-cookie")).toBeNull();
   return response.json();
 }
 beforeEach(() => {
@@ -50,9 +59,22 @@ describe("AI analysis endpoint access", () => {
     expect(mocks.analyze).not.toHaveBeenCalled();
   });
   it.each(crossSiteHeaders)("blocks cross-site uploads (%s)", async headers => {
-    await expectPrivate(await POST(request(form(), headers)), 403);
+    const incoming = request(form(), headers);
+    const read = vi.spyOn(incoming.body!, "getReader");
+    await expectPrivate(await POST(incoming), 403);
+    expect(read).not.toHaveBeenCalled();
     expect(mocks.customer).not.toHaveBeenCalled();
     expect(mocks.analyze).not.toHaveBeenCalled();
+  });
+  it.each([null, ""])("rejects absent or empty Origin before reading the upload (%s)", async origin => {
+    const headers = new Headers();
+    if (origin !== null) headers.set("origin", origin);
+    const incoming = new Request("http://localhost:3000/api/ai/analyze", { method: "POST", body: form(), headers });
+    const read = vi.spyOn(incoming.body!, "getReader");
+    await expectPrivate(await POST(incoming), 403);
+    expect(read).not.toHaveBeenCalled();
+    expect(mocks.customer).not.toHaveBeenCalled();
+    expect(mocks.analyzer).not.toHaveBeenCalled();
   });
   it("handles session verification failure without revealing private errors", async () => {
     mocks.customer.mockRejectedValue(new Error("secret database credentials"));
@@ -103,6 +125,31 @@ describe("AI analysis upload contract", () => {
     await expectPrivate(await POST(request(body)), 413);
     expect(mocks.analyze).not.toHaveBeenCalled();
   });
+  it("accepts a photo at exactly the 10 MB limit", async () => {
+    const data = new Uint8Array(10 * 1024 * 1024); data.set(png);
+    const body = form(); body.set("photo", new File([data], "limit.png", { type: "image/png" }));
+    await expectPrivate(await POST(request(body)), 200);
+    expect(mocks.analyze.mock.calls[0][0].photo.data.byteLength).toBe(data.byteLength);
+  });
+  it.each([
+    ["image/jpeg", [0xff, 0xd8, 0xff, 0xe0]],
+    ["image/webp", [...Buffer.from("RIFF"), 4, 0, 0, 0, ...Buffer.from("WEBP")]],
+  ])("accepts matching %s headers before inference", async (mimeType, header) => {
+    const body = form();
+    body.set("photo", new File([new Uint8Array(header)], "headlight", { type: mimeType }));
+    await expectPrivate(await POST(request(body)), 200);
+    expect(mocks.analyze.mock.calls[0][0].photo.mimeType).toBe(mimeType);
+  });
+  it.each(["text/plain", "image/svg+xml", "image/gif", "application/octet-stream"])("rejects unsupported MIME metadata despite a PNG filename (%s)", async type => {
+    const body = form(); body.set("photo", new File([png], "renamed.png", { type }));
+    await expectPrivate(await POST(request(body)), 415);
+    expect(mocks.analyzer).not.toHaveBeenCalled();
+  });
+  it("rejects duplicate photos before inference", async () => {
+    const body = form(); body.append("photo", new File([png], "second.png", { type: "image/png" }));
+    await expectPrivate(await POST(request(body)), 400);
+    expect(mocks.analyzer).not.toHaveBeenCalled();
+  });
   it("rejects excessive Content-Length before reading the body", async () => {
     const incoming = request(form(), { "content-length": String(12 * 1024 * 1024) });
     const read = vi.spyOn(incoming.body!, "getReader");
@@ -118,6 +165,7 @@ describe("AI analysis upload contract", () => {
     const incoming = new Request("http://localhost:3000/api/ai/analyze", {
       method: "POST", body, duplex: "half", headers: {
         "content-type": "multipart/form-data; boundary=test", "content-length": "1",
+        origin: "http://localhost:3000",
       },
     } as RequestInit);
     await expectPrivate(await POST(incoming), 413);
@@ -126,10 +174,10 @@ describe("AI analysis upload contract", () => {
   });
   it("rejects JSON and malformed multipart bodies", async () => {
     await expectPrivate(await POST(new Request("http://localhost:3000/api/ai/analyze", {
-      method: "POST", body: "{}", headers: { "content-type": "application/json" },
+      method: "POST", body: "{}", headers: { "content-type": "application/json", origin: "http://localhost:3000" },
     })), 415);
     await expectPrivate(await POST(new Request("http://localhost:3000/api/ai/analyze", {
-      method: "POST", body: "invalid", headers: { "content-type": "multipart/form-data; boundary=test" },
+      method: "POST", body: "invalid", headers: { "content-type": "multipart/form-data; boundary=test", origin: "http://localhost:3000" },
     })), 400);
     expect(mocks.analyze).not.toHaveBeenCalled();
   });

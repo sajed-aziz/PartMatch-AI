@@ -28,6 +28,30 @@ beforeEach(() => {
 });
 
 describe("customer submission privacy", () => {
+  it.each([
+    [new File([], "empty.png", { type: "image/png" }), 400],
+    [new File([new Uint8Array(10 * 1024 * 1024 + 1)], "large.png", { type: "image/png" }), 413],
+    [new File(["text"], "renamed.png", { type: "text/plain" }), 415],
+    [new File(["gif"], "animated.gif", { type: "image/gif" }), 415],
+  ] as const)("rejects invalid photos before accessing storage (%s)", async (photo, status) => {
+    const original = request(); const body = await original.formData(); body.set("photo", photo);
+    const response = await POST(new Request(original.url, { method: "POST", body }));
+    expect(response.status).toBe(status);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(sql.connect).not.toHaveBeenCalled();
+  });
+  it.each(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/avif"])("keeps %s available for seller review", async type => {
+    const original = request(); const body = await original.formData();
+    body.set("photo", new File(["photo"], "headlight", { type }));
+    expect((await POST(new Request(original.url, { method: "POST", body }))).status).toBe(201);
+    expect(sql.input).toHaveBeenCalledWith("photoMimeType", undefined, type);
+  });
+  it("permits an uppercase image extension when MIME metadata is missing", async () => {
+    const original = request(); const body = await original.formData();
+    body.set("photo", new File(["photo"], "headlight.JPG"));
+    expect((await POST(new Request(original.url, { method: "POST", body }))).status).toBe(201);
+    expect(sql.input).toHaveBeenCalledWith("photoMimeType", undefined, "image/jpeg");
+  });
   it("blocks seller submissions before storage", async () => {
     sql.customer.mockResolvedValueOnce({ CustomerId: "seller", IsSeller: true });
     const response = await POST(request());

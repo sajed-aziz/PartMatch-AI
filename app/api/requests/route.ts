@@ -2,30 +2,13 @@ import { requireAccess } from "@/lib/request-access";
 import { getSqlServerConnection, SqlServerConfigurationError } from "@/lib/sql-server";
 import { getCustomer } from "@/lib/auth";
 import { isSameOrigin, privateJson } from "@/lib/http";
+import { getPhotoMimeType, maximumPhotoSize, validatePhotoMetadata } from "@/lib/photo-validation";
 
 export const runtime = "nodejs";
 
 const supportedModel = "Mercedes-Benz C-Class (W204)";
 const supportedYears = new Set(Array.from({ length: 8 }, (_, index) => 2014 - index));
 const supportedSides = new Set(["Left (driver side)", "Right (passenger side)", "Not sure"]);
-const acceptedPhotoTypes = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "image/avif",
-]);
-const photoTypesByExtension: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".heic": "image/heic",
-  ".heif": "image/heif",
-  ".avif": "image/avif",
-};
-const maximumPhotoSize = 10 * 1024 * 1024;
 const maximumRequestSize = maximumPhotoSize + 1024 * 1024;
 const vinPattern = /^[A-HJ-NPR-Z0-9]{17}$/;
 
@@ -56,13 +39,6 @@ function readText(formData: FormData, name: string) {
 
 function validationError(message: string) {
   return privateJson({ error: message }, 400);
-}
-
-function getPhotoMimeType(photo: File) {
-  if (acceptedPhotoTypes.has(photo.type)) return photo.type;
-
-  const extension = photo.name.slice(photo.name.lastIndexOf(".")).toLowerCase();
-  return photoTypesByExtension[extension];
 }
 
 export async function POST(request: Request) {
@@ -127,15 +103,9 @@ export async function POST(request: Request) {
     return validationError("Attach a headlight photo.");
   }
 
-  const photoMimeType = getPhotoMimeType(photo);
-
-  if (!photoMimeType) {
-    return validationError("The photo must be a JPG, PNG, WebP, HEIC, HEIF, or AVIF image.");
-  }
-
-if (photo.size > maximumPhotoSize) {
-  return validationError("The photo must be 10 MB or smaller.");
-}
+  const photoError = validatePhotoMetadata(photo);
+  if (photoError) return privateJson({ error: photoError.error }, photoError.status);
+  const photoMimeType = getPhotoMimeType(photo)!;
 
   try {
     const photoData = Buffer.from(await photo.arrayBuffer());

@@ -1,0 +1,173 @@
+{
+  "command": "npm run build; npm run test:ai:flow",
+  "environment": {
+    "next": "16.3.4",
+    "node": "22.14.0",
+    "database": "Local SQL Server, Windows trusted authentication",
+    "ai": "Local Ollama gemma3:4b"
+  },
+  "limitations": [
+    "HTTP, SQL and Ollama were live; UI interactions were tested separately using simulated HTTP in JSDOM.",
+    "The sample is an authorized original JPEG; inventory is temporary test data.",
+    "Workflow success does not establish recognition accuracy. The separate three-photo semantic baseline remains failed."
+  ],
+  "startedAt": "2026-10-19T14:19:44.452Z",
+  "status": "passed",
+  "scope": "Real HTTP, SQL and Ollama; no browser automation or recognition-accuracy claim.",
+  "checks": [
+    {
+      "label": "create fixture account",
+      "status": 200
+    },
+    {
+      "label": "create fixture account",
+      "status": 200
+    },
+    {
+      "label": "create fixture account",
+      "status": 200
+    },
+    {
+      "label": "AI analysis attempt",
+      "status": 200
+    },
+    {
+      "label": "AI does not create a request",
+      "status": 200
+    },
+    {
+      "label": "seller creates fixture inventory",
+      "status": 201
+    },
+    {
+      "label": "seller creates fixture inventory",
+      "status": 201
+    },
+    {
+      "label": "customer submits reviewed request",
+      "status": 201
+    },
+    {
+      "label": "customer reads confirmed result",
+      "status": 200
+    },
+    {
+      "label": "another customer cannot read request",
+      "status": 404
+    },
+    {
+      "label": "another customer cannot read photo",
+      "status": 404
+    },
+    {
+      "label": "customer cannot confirm a part",
+      "status": 403
+    },
+    {
+      "label": "customer cannot edit seller-reviewed side",
+      "status": 403
+    },
+    {
+      "label": "seller sees incoming request",
+      "status": 200
+    },
+    {
+      "label": "seller reads submitted original photo",
+      "status": 200
+    },
+    {
+      "label": "seller retrieves compatible inventory",
+      "status": 200
+    },
+    {
+      "label": "wrong-side confirmation rejected",
+      "status": 400
+    },
+    {
+      "label": "fixture becomes unavailable",
+      "status": 200
+    },
+    {
+      "label": "stale unavailable match rejected",
+      "status": 400
+    },
+    {
+      "label": "customer reads confirmed result",
+      "status": 200
+    },
+    {
+      "label": "fixture availability restored",
+      "status": 200
+    },
+    {
+      "label": "seller explicitly confirms part",
+      "status": 200
+    },
+    {
+      "label": "customer reads confirmed result",
+      "status": 200
+    },
+    {
+      "label": "matched side cannot be overwritten",
+      "status": 409
+    },
+    {
+      "label": "customer gets seller confirmation notification",
+      "status": 200
+    },
+    {
+      "label": "customer submits reviewed request",
+      "status": 201
+    },
+    {
+      "label": "unclear side is not auto-matched",
+      "status": 200
+    },
+    {
+      "label": "unclear side cannot be confirmed",
+      "status": 400
+    },
+    {
+      "label": "seller saves reviewed vehicle-right side",
+      "status": 200
+    },
+    {
+      "label": "customer reads confirmed result",
+      "status": 200
+    },
+    {
+      "label": "seller confirms after manual side review",
+      "status": 200
+    },
+    {
+      "label": "customer reads confirmed result",
+      "status": 200
+    },
+    {
+      "label": "seller closes fixture request",
+      "status": 200
+    },
+    {
+      "label": "closed side cannot be overwritten",
+      "status": 409
+    },
+    {
+      "label": "customer submits reviewed request",
+      "status": 201
+    },
+    {
+      "label": "customer cancels fixture request",
+      "status": 200
+    },
+    {
+      "label": "cancelled side cannot be reviewed",
+      "status": 409
+    }
+  ],
+  "cleanup": true,
+  "aiSuggestion": {
+    "part": "front_headlight",
+    "side": "left"
+  },
+  "finishedAt": "2026-10-19T14:20:01.509Z"
+}

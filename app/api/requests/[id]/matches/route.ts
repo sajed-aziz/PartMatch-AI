@@ -148,18 +148,20 @@ export async function POST(
   const { id } = await params;
   if (!uuidPattern.test(id)) return privateJson({ error: "Not found." }, 404);
 
+  let body: unknown;
   try {
-    const body = await request.json();
-    const partId =
-      typeof body.partId === "string" ? body.partId : "";
+    body = await request.json();
+  } catch {
+    return privateJson({ error: "Provide valid match data." }, 400);
+  }
+  const partId = body && typeof body === "object" && !Array.isArray(body) && "partId" in body
+    && typeof body.partId === "string" ? body.partId : "";
 
-    if (!uuidPattern.test(partId)) {
-      return secureJson(
-        { error: "Select an inventory part." },
-        { status: 400 },
-      );
-    }
+  if (!uuidPattern.test(partId)) {
+    return privateJson({ error: "Select an inventory part." }, 400);
+  }
 
+  try {
     const { pool, driver } = await getSqlServerConnection();
 
     const transaction = pool.transaction();
