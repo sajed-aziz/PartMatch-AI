@@ -88,10 +88,16 @@ export async function DELETE(
 ) {
   const access = await requireAccess(undefined, true);
   if (access.response) return access.response;
-  if (!isSameOrigin(request)) return privateJson({ error: "Use the PartMatch website." }, 403);
+
+  if (!isSameOrigin(request)) {
+    return privateJson({ error: "Use the PartMatch website." }, 403);
+  }
 
   const { id } = await params;
-  if (!uuidPattern.test(id)) return privateJson({ error: "Not found." }, 404);
+
+  if (!uuidPattern.test(id)) {
+    return privateJson({ error: "Not found." }, 404);
+  }
 
   try {
     const { pool, driver } = await getSqlServerConnection();
@@ -100,36 +106,97 @@ export async function DELETE(
       .request()
       .input("partId", driver.UniqueIdentifier, id)
       .query(`
-        DELETE FROM dbo.InventoryParts
-        WHERE PartId = @partId;
+        SET XACT_ABORT ON;
 
-        SELECT @@ROWCOUNT AS DeletedRows;
+        BEGIN TRANSACTION;
+
+        IF EXISTS (
+          SELECT 1
+          FROM dbo.RequestMatches WITH (UPDLOCK, HOLDLOCK)
+          WHERE PartId = @partId
+        )
+        BEGIN
+          ROLLBACK TRANSACTION;
+          SELECT 'linked' AS Result;
+        END
+        ELSE
+        BEGIN
+          DELETE FROM dbo.InventoryParts
+          WHERE PartId = @partId;
+
+          IF @@ROWCOUNT = 0
+            SELECT 'not_found' AS Result;
+          ELSE
+            SELECT 'deleted' AS Result;
+
+          COMMIT TRANSACTION;
+        END
       `);
 
-    if (!result.recordset[0]?.DeletedRows) {
-      return secureJson(
-        { error: "Inventory part not found." },
-        { status: 404 },
+    const outcome = result.recordset[0]?.Result;
+
+    if (outcome === "linked") {
+      return privateJson(
+        {
+          error:
+            "This inventory part is linked to a customer match and cannot be deleted.",
+        },
+        409,
       );
     }
 
-    return secureJson({ ok: true });
+    if (outcome === "not_found") {
+      return privateJson(
+        { error: "Inventory part not found." },
+        404,
+      );
+    }
+
+    if (outcome !== "deleted") {
+      return privateJson(
+        { error: "The inventory part could not be deleted." },
+        500,
+      );
+    }
+
+    return privateJson({ ok: true }, 200);
   } catch (error) {
-    console.error("Inventory deletion failed", { category: "storage" });
+    console.error("Inventory deletion failed", {
+      category: "storage",
+    });
 
     if (error instanceof SqlServerConfigurationError) {
-      return secureJson(
+      return privateJson(
         { error: "The inventory service is not configured yet." },
-        { status: 503 },
+        503,
       );
     }
 
-    return secureJson(
+    const sqlError = error as {
+      number?: number;
+      originalError?: { info?: { number?: number } };
+    };
+
+    const errorNumber =
+      sqlError.number ?? sqlError.originalError?.info?.number;
+
+    if (errorNumber === 547) {
+      return privateJson(
+        {
+          error:
+            "This part is referenced by another record and cannot be deleted.",
+        },
+        409,
+      );
+    }
+
+    return privateJson(
       { error: "The inventory part could not be deleted." },
-      { status: 500 },
+      500,
     );
   }
 }
+
 function secureJson(body: unknown, options?: { status: number }) {
   return privateJson(body, options?.status ?? 200);
 }
