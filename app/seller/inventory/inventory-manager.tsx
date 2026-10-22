@@ -158,7 +158,15 @@ export default function InventoryManager() {
 
   async function updatePart(
     part: InventoryPart,
-    changes: Partial<Pick<InventoryPart, "price" | "available">>,
+    changes: Partial<{
+      partName: string;
+      headlightSide: string;
+      condition: string;
+      price: number;
+      available: boolean;
+      yearFrom: number;
+      yearTo: number;
+    }>,
   ) {
     setError("");
 
@@ -169,8 +177,13 @@ export default function InventoryManager() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          partName: changes.partName ?? part.partName,
+          headlightSide: changes.headlightSide ?? part.headlightSide,
+          condition: changes.condition ?? part.condition,
           price: changes.price ?? part.price,
           available: changes.available ?? part.available,
+          yearFrom: changes.yearFrom ?? part.compatibility.yearFrom,
+          yearTo: changes.yearTo ?? part.compatibility.yearTo,
         }),
       });
 
@@ -477,6 +490,48 @@ export default function InventoryManager() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const partName = window.prompt("Part name:", part.partName);
+                        if (partName === null) return;
+
+                        const headlightSide = window.prompt(
+                          "Headlight side (Left (driver side) / Right (passenger side)):",
+                          part.headlightSide,
+                        );
+                        if (headlightSide === null) return;
+
+                        const condition = window.prompt(
+                          "Condition (new / used / refurbished):",
+                          part.condition,
+                        );
+                        if (condition === null) return;
+
+                        const fromInput = window.prompt(
+                          "Compatible from year:",
+                          String(part.compatibility.yearFrom),
+                        );
+                        if (fromInput === null) return;
+
+                        const toInput = window.prompt(
+                          "Compatible to year:",
+                          String(part.compatibility.yearTo),
+                        );
+                        if (toInput === null) return;
+
+                        void updatePart(part, {
+                          partName,
+                          headlightSide,
+                          condition,
+                          yearFrom: Number(fromInput),
+                          yearTo: Number(toInput),
+                        });
+                      }}
+                      className="rounded-lg border border-[#536ee8] px-4 py-2 text-sm font-medium text-[#536ee8]"
+                    >
+                      Edit details
+                    </button>
                     <button
                       onClick={() => {
                         const value = window.prompt(
