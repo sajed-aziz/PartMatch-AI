@@ -23,6 +23,9 @@ export default function SellerDashboard() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -55,10 +58,33 @@ export default function SellerDashboard() {
     loadRequests();
   }, [revision]);
 
-  const filteredRequests =
-    statusFilter === "all"
-      ? requests
-      : requests.filter((request) => request.status === statusFilter);
+  const filteredRequests = requests
+    .filter((request) => {
+      const query = search.trim().toLowerCase();
+
+      const matchesStatus =
+        statusFilter === "all" || request.status === statusFilter;
+
+      const matchesSearch =
+        request.customerName.toLowerCase().includes(query) ||
+        request.id.toLowerCase().includes(query);
+
+      return matchesStatus && matchesSearch;
+    })
+    .sort((a, b) => {
+      const firstDate = new Date(a.createdAt).getTime();
+      const secondDate = new Date(b.createdAt).getTime();
+
+      return sortBy === "oldest"
+        ? firstDate - secondDate
+        : secondDate - firstDate;
+    });
+
+  function resetFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setSortBy("newest");
+  }
 
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-[#182033]">
@@ -89,6 +115,47 @@ export default function SellerDashboard() {
             Review customer requests for Mercedes-Benz C-Class W204
             front headlights.
           </p>
+        </div>
+
+        <div className="mb-5 rounded-xl border border-[#e1e4e8] bg-white p-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium">
+              Search requests
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Customer name or request ID..."
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              />
+            </label>
+
+            <label className="text-sm font-medium">
+              Sort by
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-[#697386]">
+              Showing {filteredRequests.length} of {requests.length} requests
+            </p>
+
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="rounded-lg border border-[#cfd5dd] px-4 py-2 text-sm font-medium hover:bg-gray-50"
+            >
+              Reset filters
+            </button>
+          </div>
         </div>
 
         <div className="mb-6 flex flex-wrap gap-2">
@@ -145,9 +212,11 @@ export default function SellerDashboard() {
           requests.length > 0 &&
           filteredRequests.length === 0 && (
             <div className="rounded-xl border border-[#e1e4e8] bg-white p-8 text-center">
-              <p className="font-medium">No requests with this status.</p>
+              <p className="font-medium">
+                No requests match your search or filters.
+              </p>
               <p className="mt-2 text-sm text-[#8a93a3]">
-                Choose another status to view incoming requests.
+                Try another search or reset the filters.
               </p>
             </div>
           )}

@@ -82,13 +82,13 @@ export default async function Home() {
           <div className="ml-auto flex items-center gap-2 sm:gap-5">
             {customer ? <NotificationLink /> : null}
             {customer ? <SignOutButton /> : <a href="/sign-in" className="text-sm font-medium text-[#536ee8]">Sign in</a>}
-            <button
-              type="button"
+            <a
+              href="/help"
               className="hidden items-center gap-2 text-sm font-medium text-[#667085] transition hover:text-[#182033] sm:flex"
             >
               <HelpIcon />
               Help
-            </button>
+            </a>
             <span className="h-5 w-px bg-[#e4e7ec] max-sm:hidden" />
             <div className="flex items-center gap-2 text-xs font-medium text-[#5f697a] sm:text-sm">
               <LocationIcon />
