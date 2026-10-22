@@ -37,6 +37,10 @@ export default function MyRequestsPage() {
   const [unauthorized, setUnauthorized] = useState(false);
   const [revision, setRevision] = useState(0);
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+
   useEffect(() => {
     const controller = new AbortController();
     async function loadRequests() {
@@ -83,6 +87,38 @@ export default function MyRequestsPage() {
     }
   }, [requests]);
 
+  const filteredRequests = requests
+    .filter((request) => {
+      const query = search.trim().toLowerCase();
+
+      const matchesSearch =
+        request.id.toLowerCase().includes(query) ||
+        request.vehicleModel.toLowerCase().includes(query) ||
+        String(request.vehicleYear).includes(query) ||
+        request.headlightSide.toLowerCase().includes(query);
+
+      const effectiveStatus = request.cancelledAt
+        ? "cancelled"
+        : request.status;
+
+      const matchesStatus =
+        statusFilter === "all" || effectiveStatus === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const first = new Date(a.createdAt).getTime();
+      const second = new Date(b.createdAt).getTime();
+
+      return sortBy === "oldest" ? first - second : second - first;
+    });
+
+  function resetFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setSortBy("newest");
+  }
+
   function refreshFollowUp() {
     setRevision(value => value + 1);
     window.dispatchEvent(new Event(notificationChangedEvent));
@@ -128,6 +164,62 @@ export default function MyRequestsPage() {
         </div>
 
         <button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)} className="mb-5 rounded-lg border bg-white px-4 py-2 text-sm disabled:opacity-50">{loading ? "Refreshing..." : "Refresh requests"}</button>
+        <div className="mb-6 rounded-xl border border-[#e1e4e8] bg-white p-5">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="text-sm font-medium">
+              Search requests
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Model, year, side or request ID..."
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              />
+            </label>
+
+            <label className="text-sm font-medium">
+              Status
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              >
+                <option value="all">All statuses</option>
+                <option value="submitted">Submitted</option>
+                <option value="under_review">Under review</option>
+                <option value="matched">Matched</option>
+                <option value="closed">Closed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+
+            <label className="text-sm font-medium">
+              Sort by
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className="mt-2 h-11 w-full rounded-lg border border-[#cfd5dd] px-3"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-[#697386]">
+              Showing {filteredRequests.length} of {requests.length} requests
+            </p>
+
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="rounded-lg border border-[#cfd5dd] px-4 py-2 text-sm font-medium hover:bg-gray-50"
+            >
+              Reset filters
+            </button>
+          </div>
+        </div>
 
         {loading && (
           <div className="rounded-xl border border-[#e1e4e8] bg-white p-6 text-sm text-[#697386]">
@@ -169,9 +261,23 @@ export default function MyRequestsPage() {
           </div>
         )}
 
-        {!loading && !error && requests.length > 0 && (
+        {!loading &&
+          !error &&
+          requests.length > 0 &&
+          filteredRequests.length === 0 && (
+            <div className="rounded-xl border border-[#e1e4e8] bg-white p-8 text-center">
+              <p className="font-medium">
+                No requests match your search or filters.
+              </p>
+              <p className="mt-2 text-sm text-[#8a93a3]">
+                Try another search or reset the filters.
+              </p>
+            </div>
+          )}
+
+        {!loading && !error && filteredRequests.length > 0 && (
           <div className="space-y-5">
-            {requests.map((request) => (
+            {filteredRequests.map((request) => (
               <article
                 key={request.id}
                 id={`request-${request.id}`}
