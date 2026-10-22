@@ -1,0 +1,121 @@
+{
+  "recordedDate": "2026-10-19",
+  "conclusion": "Live semantic acceptance failed: zero of three cases passed in each run. Provider and labels unchanged between runs.",
+  "runs": [
+    {
+      "startedAt": "2026-10-19T13:12:16.575Z",
+      "finishedAt": "2026-10-19T13:14:50.050Z",
+      "model": "gemma3:4b",
+      "modelDigest": "68ceab7e468a31c988b44d5a4984a0e21f58c4f7158c6ce29c1804babac38df7",
+      "providerSha256": "66e04d5d2b87ba31471a2859c2617d8b85b427f6124f4b4cd367151cae658f8f",
+      "scope": "Real production AI route and Ollama inference; customer session stubbed. No browser, SQL or seller verification.",
+      "limitations": "Three public JPEGs; no seller-verified left/right, detached, blurred, damaged, mirrored, PNG or WebP photo coverage. Not an accuracy estimate.",
+      "planned": 3,
+      "completed": 3,
+      "passed": 0,
+      "results": [
+        {
+          "id": "w204-single-headlight-closeup",
+          "sha256": "618615842fa4815f50d096194bb93f23b97c9fba843e6459fb0eeed2b40683c5",
+          "expected": {
+            "part": "front_headlight",
+            "side": "unknown"
+          },
+          "actual": null,
+          "status": "service_error",
+          "httpStatus": 503,
+          "elapsedMs": 120200
+        },
+        {
+          "id": "w204-rear-view-negative",
+          "sha256": "2ed40a6094618e5e315035ac6b60a39f7640280b58404034215099ebd90f48be",
+          "expected": {
+            "part": "unknown",
+            "side": "unknown"
+          },
+          "actual": {
+            "part": "front_headlight",
+            "side": "right"
+          },
+          "status": "mismatch",
+          "httpStatus": 200,
+          "elapsedMs": 29188
+        },
+        {
+          "id": "w204-multiple-headlights-ambiguous",
+          "sha256": "b8622a3b6f0c19db8dd539f1c106d92b02e70c31315babb88c172ea0d636cf92",
+          "expected": {
+            "part": "unknown",
+            "side": "unknown"
+          },
+          "actual": {
+            "part": "front_headlight",
+            "side": "left"
+          },
+          "status": "mismatch",
+          "httpStatus": 200,
+          "elapsedMs": 3511
+        }
+      ]
+    },
+    {
+      "startedAt": "2026-10-19T13:15:48.524Z",
+      "finishedAt": "2026-10-19T13:15:59.211Z",
+      "model": "gemma3:4b",
+      "modelDigest": "68ceab7e468a31c988b44d5a4984a0e21f58c4f7158c6ce29c1804babac38df7",
+      "providerSha256": "66e04d5d2b87ba31471a2859c2617d8b85b427f6124f4b4cd367151cae658f8f",
+      "scope": "Real production AI route and Ollama inference; customer session stubbed. No browser, SQL or seller verification.",
+      "limitations": "Three public JPEGs; no seller-verified left/right, detached, blurred, damaged, mirrored, PNG or WebP photo coverage. Not an accuracy estimate.",
+      "planned": 3,
+      "completed": 3,
+      "passed": 0,
+      "results": [
+        {
+          "id": "w204-single-headlight-closeup",
+          "sha256": "618615842fa4815f50d096194bb93f23b97c9fba843e6459fb0eeed2b40683c5",
+          "expected": {
+            "part": "front_headlight",
+            "side": "unknown"
+          },
+          "actual": {
+            "part": "front_headlight",
+            "side": "left"
+          },
+          "status": "mismatch",
+          "httpStatus": 200,
+          "elapsedMs": 4139
+        },
+        {
+          "id": "w204-rear-view-negative",
+          "sha256": "2ed40a6094618e5e315035ac6b60a39f7640280b58404034215099ebd90f48be",
+          "expected": {
+            "part": "unknown",
+            "side": "unknown"
+          },
+          "actual": {
+            "part": "front_headlight",
+            "side": "right"
+          },
+          "status": "mismatch",
+          "httpStatus": 200,
+          "elapsedMs": 2920
+        },
+        {
+          "id": "w204-multiple-headlights-ambiguous",
+          "sha256": "b8622a3b6f0c19db8dd539f1c106d92b02e70c31315babb88c172ea0d636cf92",
+          "expected": {
+            "part": "unknown",
+            "side": "unknown"
+          },
+          "actual": {
+            "part": "front_headlight",
+            "side": "left"
+          },
+          "status": "mismatch",
+          "httpStatus": 200,
+          "elapsedMs": 3407
+        }
+      ]
+    }
+  ]
+}

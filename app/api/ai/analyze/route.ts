@@ -2,10 +2,10 @@ import { aiVehicleModel, getHeadlightAnalyzer } from "@/lib/ai-analysis";
 import { requireCustomer } from "@/lib/customer-access";
 import { privateJson } from "@/lib/http";
 import { AIProviderError } from "@/lib/ollama-headlight-analyzer";
+import { maximumPhotoSize, validatePhotoMetadata } from "@/lib/photo-validation";
 
 export const runtime = "nodejs";
 
-const maximumPhotoSize = 10 * 1024 * 1024;
 const maximumRequestSize = maximumPhotoSize + 1024 * 1024;
 const unavailableMessage = "AI analysis is unavailable. You can still submit your request for seller review.";
 
@@ -53,6 +53,11 @@ function photoMimeType(data: Uint8Array) {
 }
 
 export async function POST(request: Request) {
+  // Browser photo uploads must identify their origin. The customer gate below
+  // verifies the exact origin and rejects cross-site fetch metadata.
+  if (!request.headers.get("origin")) {
+    return privateJson({ error: "Use the PartMatch website." }, 403);
+  }
   const access = await requireCustomer(request);
   if (access.response) return access.response;
 
@@ -92,9 +97,8 @@ export async function POST(request: Request) {
   if (!(photo instanceof File) || photo.size === 0) {
     return privateJson({ error: "Attach a headlight photo." }, 400);
   }
-  if (photo.size > maximumPhotoSize) {
-    return privateJson({ error: "The photo must be 10 MB or smaller." }, 413);
-  }
+  const photoError = validatePhotoMetadata(photo, "analysis");
+  if (photoError) return privateJson({ error: photoError.error }, photoError.status);
   const data = new Uint8Array(await photo.arrayBuffer());
   const mimeType = photoMimeType(data);
   if (!mimeType || photo.type !== mimeType) {

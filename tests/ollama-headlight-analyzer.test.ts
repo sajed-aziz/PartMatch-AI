@@ -45,11 +45,12 @@ describe("local Ollama vision request", () => {
     expect(await analyzer().analyze(input)).toEqual({ part: "front_headlight", side: "left" });
     const [url, options] = http.mock.calls[0];
     expect(url).toBe("http://127.0.0.1:11434/api/chat");
-    expect(options).toMatchObject({ method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store", redirect: "error" });
+    expect(options).toMatchObject({ method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store", redirect: "error", credentials: "omit", referrerPolicy: "no-referrer" });
+    expect(Object.keys(options.headers)).toEqual(["Content-Type"]);
     expect(options.headers).not.toHaveProperty("Authorization");
     expect(options.signal).toBeInstanceOf(AbortSignal);
     const body = JSON.parse(options.body);
-    expect(body).toMatchObject({ model: "gemma3:4b", stream: false, keep_alive: "2m", options: { temperature: 0, num_ctx: 2048, num_predict: 256 } });
+    expect(body).toMatchObject({ model: "gemma3:4b", stream: false, keep_alive: 0, options: { temperature: 0, num_ctx: 2048, num_predict: 256 } });
     expect(body.messages[1].images).toEqual(["/9j/"]);
     expect(body.format).toMatchObject({ type: "object", additionalProperties: false });
     expect(body.messages[0].content).toContain("Image-left is not vehicle-left");
@@ -68,6 +69,13 @@ describe("local Ollama vision request", () => {
     expect(timeout).toHaveBeenCalledWith(120_000);
     expect(signal).toBeInstanceOf(AbortSignal);
     expect(http).toHaveBeenCalledTimes(1);
+  });
+  it.each([307, 308])("rejects an upstream redirect without forwarding the photo (%s)", async status => {
+    http.mockResolvedValueOnce(new Response(null, { status, headers: { location: "https://external.example/collect" } }));
+    await expect(analyzer().analyze(input)).rejects.toMatchObject({ kind: "unavailable" });
+    expect(http).toHaveBeenCalledTimes(1);
+    expect(http.mock.calls[0][0]).toBe("http://127.0.0.1:11434/api/chat");
+    expect(http.mock.calls[0][1].redirect).toBe("error");
   });
 });
 

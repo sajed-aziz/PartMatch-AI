@@ -75,7 +75,7 @@ export async function GET(
           r.Status,
           r.CreatedAt,
           r.UpdatedAt,
-          r.SellerNote,
+          CASE WHEN @isSeller = 1 THEN r.SellerNote ELSE NULL END AS SellerNote,
           r.CancelledAt,
           f.Rating AS FeedbackRating,
           f.Comment AS FeedbackComment,
@@ -110,7 +110,7 @@ export async function GET(
         status: customerRequest.Status,
         createdAt: customerRequest.CreatedAt.toISOString(),
         updatedAt: customerRequest.UpdatedAt.toISOString(),
-        sellerNote: customerRequest.SellerNote,
+        ...(access.customer.IsSeller ? { sellerNote: customerRequest.SellerNote } : {}),
         cancelledAt: customerRequest.CancelledAt?.toISOString() ?? null,
         feedback: customerRequest.FeedbackRating
           ? {
@@ -177,6 +177,7 @@ export async function PATCH(
   let body: {
     status?: string;
     sellerNote?: unknown;
+    headlightSide?: unknown;
   };
 
   try {
@@ -188,8 +189,22 @@ export async function PATCH(
     );
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return privateJson({ error: "Provide valid request data." }, 400);
+  }
+  if ("sellerNote" in body && (typeof body.sellerNote !== "string" || "status" in body)) {
+    return privateJson({ error: "Provide a text note as a separate update." }, 400);
+  }
+  if ("headlightSide" in body && (
+    typeof body.headlightSide !== "string" ||
+    !["Left (driver side)", "Right (passenger side)"].includes(body.headlightSide) ||
+    "status" in body || "sellerNote" in body
+  )) {
+    return privateJson({ error: "Select one headlight side after reviewing the customer photo." }, 400);
+  }
+
     // Validate the requested update before connecting to storage.
-    if (!("sellerNote" in body)) {
+    if (!("sellerNote" in body) && !("headlightSide" in body)) {
       const status = body.status;
 
       if (
@@ -206,6 +221,29 @@ export async function PATCH(
     try {
       const { pool, driver } =
         await getSqlServerConnection();
+
+    if ("headlightSide" in body) {
+      const result = await pool.request()
+        .input("requestId", driver.UniqueIdentifier, id)
+        .input("headlightSide", driver.NVarChar(30), body.headlightSide)
+        .query(`
+          UPDATE r
+          SET HeadlightSide = @headlightSide,
+              Status = 'under_review',
+              UpdatedAt = SYSUTCDATETIME()
+          FROM dbo.CustomerRequests AS r WITH (UPDLOCK, HOLDLOCK)
+          WHERE r.RequestId = @requestId
+            AND r.ConsentVersion IS NOT NULL AND r.ConsentAcceptedAt IS NOT NULL
+            AND r.CancelledAt IS NULL
+            AND r.Status IN ('submitted', 'under_review')
+            AND NOT EXISTS (SELECT 1 FROM dbo.RequestMatches m WHERE m.RequestId = r.RequestId);
+          SELECT @@ROWCOUNT AS UpdatedRows;
+        `);
+      if (!result.recordset[0]?.UpdatedRows) {
+        return privateJson({ error: "The request can no longer be changed. Refresh before reviewing its side." }, 409);
+      }
+      return privateJson({ ok: true }, 200);
+    }
 
       // SCRUM-40: Save seller internal note
     if ("sellerNote" in body) {

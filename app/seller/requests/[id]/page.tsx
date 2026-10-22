@@ -61,6 +61,9 @@ export default function SellerRequestDetails({
   const [photoLoaded, setPhotoLoaded] = useState(false);
   const [photoRevision, setPhotoRevision] = useState(0);
   const [updating, setUpdating] = useState(false);
+  const [reviewedSide, setReviewedSide] = useState("");
+  const [savingSide, setSavingSide] = useState(false);
+  const [sideMessage, setSideMessage] = useState("");
   const [sellerNote, setSellerNote] = useState("");
 const [savingNote, setSavingNote] = useState(false);
 const [noteMessage, setNoteMessage] = useState("");
@@ -88,6 +91,9 @@ const [noteMessage, setNoteMessage] = useState("");
   const loadMatches = useCallback(async () => {
     setMatchesLoading(true);
     setMatchError("");
+    setMatches([]);
+    setMatchMessage("");
+    setSideMessage("");
 
     try {
       const response = await fetch(`/api/requests/${id}/matches`, {
@@ -108,12 +114,14 @@ const [noteMessage, setNoteMessage] = useState("");
 
       setMatches(data.matches || []);
       setMatchMessage(data.message || "");
+      return true;
     } catch (reason) {
       setMatchError(
         reason instanceof Error
           ? reason.message
           : "Could not load compatible inventory.",
       );
+      return false;
     } finally {
       setMatchesLoading(false);
     }
@@ -188,6 +196,7 @@ const [noteMessage, setNoteMessage] = useState("");
   }
 
   async function confirmMatch(partId: string) {
+    if (savingSide || updating || confirmingId) return;
     setConfirmingId(partId);
     setMatchError("");
 
@@ -218,6 +227,27 @@ const [noteMessage, setNoteMessage] = useState("");
     } finally {
       setConfirmingId("");
     }
+  }
+
+  async function saveReviewedSide() {
+    if (savingSide || updating || confirmingId || !reviewedSide) return;
+    setSavingSide(true);
+    setSideMessage("");
+    try {
+      const response = await fetch(`/api/requests/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ headlightSide: reviewedSide }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "The reviewed side could not be saved.");
+      const [, inventoryLoaded] = await Promise.all([loadRequest(), loadMatches()]);
+      setReviewedSide("");
+      setSideMessage(inventoryLoaded
+        ? "Reviewed side saved. Select a compatible part and confirm the match separately."
+        : "Reviewed side saved, but inventory could not be refreshed. Use Retry inventory before confirming a part.");
+    } catch (reason) {
+      setSideMessage(reason instanceof Error ? reason.message : "The reviewed side could not be saved. Refresh and try again.");
+    } finally { setSavingSide(false); }
   }
 
   const confirmedMatch = matches.find((part) => part.confirmed);
@@ -316,7 +346,7 @@ const [noteMessage, setNoteMessage] = useState("");
                   {requestDetails.status === "submitted" && (
                     <button
                       type="button"
-                      disabled={updating}
+                      disabled={updating || savingSide || confirmingId !== ""}
                       onClick={() => void updateStatus("under_review")}
                       className="mt-4 rounded-lg border bg-white px-4 py-2 text-sm"
                     >
@@ -327,7 +357,7 @@ const [noteMessage, setNoteMessage] = useState("");
                   {requestDetails.status !== "closed" && (
                     <button
                       type="button"
-                      disabled={updating || confirmingId !== ""}
+                      disabled={updating || savingSide || confirmingId !== ""}
                       onClick={() => void updateStatus("closed")}
                       className="ml-3 mt-4 rounded-lg border bg-white px-4 py-2 text-sm"
                     >
@@ -416,6 +446,26 @@ const [noteMessage, setNoteMessage] = useState("");
                 </p>
               </section>
             </div>
+
+            {!requestDetails.cancelledAt && ["submitted", "under_review"].includes(requestDetails.status) && !confirmedMatch ? (
+              <section aria-label="Seller headlight side review" className="mt-6 rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold">Review headlight side</h2>
+                <p className="mt-2 text-sm text-[#697386]">Check the customer photo and vehicle details before choosing a side. Left and right are from inside the vehicle, facing forward. A saved side still requires a compatible part and your match confirmation.</p>
+                <label htmlFor="seller-reviewed-side" className="mt-4 block text-sm font-medium">Seller-reviewed headlight side</label>
+                <select id="seller-reviewed-side" value={reviewedSide} onChange={event => setReviewedSide(event.target.value)}
+                  disabled={savingSide || updating || confirmingId !== ""}
+                  className="mt-2 min-h-11 w-full rounded-lg border border-[#d8dce3] bg-white px-3 text-sm sm:max-w-sm">
+                  <option value="">Select after reviewing the photo</option>
+                  <option value="Left (driver side)">Vehicle left</option>
+                  <option value="Right (passenger side)">Vehicle right</option>
+                </select>
+                <button type="button" onClick={() => void saveReviewedSide()} disabled={!reviewedSide || savingSide || updating || confirmingId !== ""}
+                  className="mt-3 block min-h-11 rounded-lg bg-[#536ee8] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  {savingSide ? "Saving reviewed side..." : "Save reviewed side"}
+                </button>
+                <p role="status" className="mt-3 text-sm text-[#697386]">{sideMessage}</p>
+              </section>
+            ) : null}
 
             <section className="mt-6 rounded-xl border border-[#e1e4e8] bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold">Seller note</h2>
@@ -592,7 +642,7 @@ const [noteMessage, setNoteMessage] = useState("");
                         <button
                           type="button"
                           disabled={
-                            requestDetails.status === "closed" || updating || part.confirmed ||
+                            requestDetails.status === "closed" || updating || savingSide || part.confirmed ||
                             confirmingId !== ""
                           }
                           onClick={() => confirmMatch(part.id)}

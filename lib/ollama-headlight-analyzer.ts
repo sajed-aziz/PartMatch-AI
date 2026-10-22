@@ -116,11 +116,14 @@ export function createOllamaHeadlightAnalyzer(model = "gemma3:4b"): HeadlightAna
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
           redirect: "error",
+          credentials: "omit",
+          referrerPolicy: "no-referrer",
           signal: AbortSignal.timeout(timeoutMs),
           body: JSON.stringify({
             model,
             stream: false,
-            keep_alive: "2m",
+            // Release the local model before the SQL/photo submission flow.
+            keep_alive: 0,
             options: { temperature: 0, num_predict: 256, num_ctx: 2048 },
             messages: [
               { role: "system", content: `${instructions}\nOutput JSON matching this schema: ${JSON.stringify(resultSchema)}` },

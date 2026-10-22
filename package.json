@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:ai:photos": "vitest run --config vitest.ai-photos.config.mts",
+    "test:ai:flow": "node scripts/verify-sprint5.mjs"
   },
   "dependencies": {
     "msnodesqlv8": "^5.5.0",

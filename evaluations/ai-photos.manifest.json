@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Small live smoke check, not an accuracy benchmark. Labels fixed by visual inspection before inference; no seller verification or compatibility claims.",
+  "samples": [
+    {
+      "id": "w204-single-headlight-closeup",
+      "file": "local/ai-photos/w204-headlight.jpg",
+      "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/b/bc/MB-C250D-2012-Headlight.JPG",
+      "sha256": "618615842fa4815f50d096194bb93f23b97c9fba843e6459fb0eeed2b40683c5",
+      "mimeType": "image/jpeg",
+      "year": 2012,
+      "authorization": {
+        "basis": "open-license",
+        "source": "https://commons.wikimedia.org/wiki/File:MB-C250D-2012-Headlight.JPG",
+        "author": "Premnath Kudva (Premkudva)",
+        "license": "CC BY-SA 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "modifications": "None; original file downloaded unchanged."
+      },
+      "expected": { "part": "front_headlight", "side": "unknown" },
+      "rationale": "One clear mounted front headlight. Tight crop: the production policy requires side unknown rather than inferring orientation from shape or image-left."
+    },
+    {
+      "id": "w204-rear-view-negative",
+      "file": "local/ai-photos/w204-rear.jpg",
+      "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/2/20/Mercedes_W204_Wei%C3%9F_Hinten.jpg",
+      "sha256": "2ed40a6094618e5e315035ac6b60a39f7640280b58404034215099ebd90f48be",
+      "mimeType": "image/jpeg",
+      "year": 2008,
+      "authorization": {
+        "basis": "public-domain",
+        "source": "https://commons.wikimedia.org/wiki/File:Mercedes_W204_Wei%C3%9F_Hinten.jpg",
+        "author": "M 93",
+        "license": "Public domain (PD-self)",
+        "licenseUrl": "https://commons.wikimedia.org/wiki/File:Mercedes_W204_Wei%C3%9F_Hinten.jpg#Licensing",
+        "modifications": "None; original file downloaded unchanged."
+      },
+      "expected": { "part": "unknown", "side": "unknown" },
+      "rationale": "Main vehicle shown from the rear/side with a rear lamp; no front headlight is the main subject."
+    },
+    {
+      "id": "w204-multiple-headlights-ambiguous",
+      "file": "local/ai-photos/w204-whole-front.jpg",
+      "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Mercedes_C-Klasse_W204_front.JPG",
+      "sha256": "b8622a3b6f0c19db8dd539f1c106d92b02e70c31315babb88c172ea0d636cf92",
+      "mimeType": "image/jpeg",
+      "year": 2008,
+      "authorization": {
+        "basis": "public-domain",
+        "source": "https://commons.wikimedia.org/wiki/File:Mercedes_C-Klasse_W204_front.JPG",
+        "author": "M 93",
+        "license": "Public domain (PD-self)",
+        "licenseUrl": "https://commons.wikimedia.org/wiki/File:Mercedes_C-Klasse_W204_front.JPG#Licensing",
+        "modifications": "None; original file downloaded unchanged."
+      },
+      "expected": { "part": "unknown", "side": "unknown" },
+      "rationale": "Whole vehicle with both front headlights visible and no selected target lamp; the conservative production contract calls for unknown."
+    }
+  ]
+}
